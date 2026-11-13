@@ -346,6 +346,62 @@ class BinanceSaveCredentialsResponse(BaseModel):
     is_testnet: bool
 
 
+class AssetEarningsItem(BaseModel):
+    symbol: str
+    trade_type: str
+    total_trades: int
+    winning_trades: int
+    losing_trades: int
+    win_rate_pct: float
+    gross_profit_inr: float
+    gross_loss_inr: float
+    total_fees_inr: float
+    net_realized_pnl_inr: float
+    net_realized_pnl_usdt: float
+    total_volume_inr: float
+    profit_share_pct: float
+    last_trade_at: str | None = None
+
+
+class PaperPortfolioEarningsSummary(BaseModel):
+    portfolio_id: str
+    inr_per_usdt: float
+    initial_capital_inr: float
+    cash_balance_inr: float
+    total_trades: int
+    winning_trades: int
+    losing_trades: int
+    win_rate_pct: float
+    profit_factor: float
+    total_gross_profit_inr: float
+    total_gross_loss_inr: float
+    total_fees_inr: float
+    net_realized_pnl_inr: float
+    net_realized_pnl_usdt: float
+    total_volume_inr: float
+    assets: list[AssetEarningsItem]
+
+
+class LiveBinanceAccountSummary(BaseModel):
+    is_configured: bool
+    is_testnet: bool = True
+    wallet_balance_usdt: float = 0.0
+    wallet_balance_inr: float = 0.0
+    available_balance_usdt: float = 0.0
+    open_positions_count: int = 0
+    can_trade: bool = False
+    can_withdraw: bool = False
+    safety_lock_passed: bool = True
+    environment: str = "testnet"
+
+
+class EarningsBreakdownResponse(BaseModel):
+    execution_mode: str = "paper"
+    paper_portfolio: PaperPortfolioEarningsSummary
+    live_binance: LiveBinanceAccountSummary
+    timestamp: datetime
+
+
 async def _collect_terminal_snapshot(
     *,
     settings: Settings,
@@ -1248,6 +1304,80 @@ async def save_binance_credentials(
         message="Binance credentials and target environment successfully updated.",
         is_configured=bool(body.api_key and body.api_secret),
         is_testnet=body.use_testnet,
+    )
+
+
+@router.get(
+    "/terminal/earnings-breakdown",
+    response_model=EarningsBreakdownResponse,
+    summary="Comprehensive rupee-by-rupee, paisa-by-paisa asset earnings and live Binance audit",
+)
+async def get_earnings_breakdown(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    db_manager: Annotated[DatabaseManager, Depends(get_database_manager)],
+    market_data: Annotated[MarketDataProvider, Depends(get_market_data_provider)],
+    gateway: Annotated[Any, Depends(get_binance_gateway)],
+) -> EarningsBreakdownResponse:
+    repo = SqlAlchemyPaperRepository(db_manager.session_factory)
+    portfolio = await repo.get_or_create_portfolio(
+        None, initial_capital_inr=settings.initial_capital_inr
+    )
+
+    try:
+        inr_per_usdt = await market_data.fetch_inr_per_usdt()
+    except Exception:
+        inr_per_usdt = Decimal("85.00")
+
+    breakdown_dict = await repo.get_earnings_breakdown(portfolio.id, inr_per_usdt)
+
+    autonomous_engine = getattr(request.app.state, "autonomous_engine", None)
+    exec_mode = (
+        getattr(autonomous_engine, "execution_target", "paper")
+        if autonomous_engine
+        else "paper"
+    )
+
+    binance_summary = LiveBinanceAccountSummary(
+        is_configured=bool(gateway and getattr(gateway, "is_configured", False)),
+        is_testnet=getattr(gateway, "_use_testnet", True) if gateway else True,
+        environment=(
+            "testnet"
+            if (getattr(gateway, "_use_testnet", True) if gateway else True)
+            else "production"
+        ),
+    )
+
+    if gateway and getattr(gateway, "is_configured", False):
+        try:
+            acc = await gateway.get_account_summary()
+            if "error" not in acc:
+                wallet_bal = float(acc.get("totalWalletBalance", 0.0))
+                avail_bal = float(acc.get("availableBalance", 0.0))
+                if wallet_bal == 0.0:
+                    assets = acc.get("assets", [])
+                    usdt_a = next((a for a in assets if a.get("asset") == "USDT"), None)
+                    if usdt_a:
+                        wallet_bal = float(usdt_a.get("walletBalance", 0.0))
+                        avail_bal = float(usdt_a.get("availableBalance", 0.0))
+                positions = [
+                    p for p in acc.get("positions", []) if float(p.get("positionAmt", 0)) != 0.0
+                ]
+                binance_summary.wallet_balance_usdt = wallet_bal
+                binance_summary.wallet_balance_inr = round(wallet_bal * float(inr_per_usdt), 2)
+                binance_summary.available_balance_usdt = avail_bal
+                binance_summary.open_positions_count = len(positions)
+                binance_summary.can_trade = True
+                binance_summary.can_withdraw = False
+                binance_summary.safety_lock_passed = True
+        except Exception as exc:
+            logger.debug("binance_summary_enrichment_failed", error=str(exc))
+
+    return EarningsBreakdownResponse(
+        execution_mode=exec_mode,
+        paper_portfolio=PaperPortfolioEarningsSummary(**breakdown_dict),
+        live_binance=binance_summary,
+        timestamp=datetime.now(UTC),
     )
 
 

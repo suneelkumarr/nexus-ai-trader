@@ -31,6 +31,20 @@ class EngineStatusResponse(BaseModel):
     recently_evaluated_symbols: list[str] = []
     recent_opportunities: list[dict[str, Any]] = []
     recent_orders_placed: list[str] = []
+    execution_target: str = "paper"
+    binance_configured: bool = False
+
+
+class SetExecutionModeRequest(BaseModel):
+    mode: str
+
+
+class ExecutionModeResponse(BaseModel):
+    execution_target: str
+    previous_target: str | None = None
+    message: str
+    binance_configured: bool = False
+    is_running: bool = True
 
 
 def get_autonomous_engine(request: Request) -> AutonomousEngineService:
@@ -86,4 +100,45 @@ async def refresh_ai_research(
 ) -> Any:
     """Force an immediate market research refresh across all 54 spot pairs via CrowLLM."""
     return await engine._refresh_ai_research()
+
+
+@router.get("/execution-mode", response_model=ExecutionModeResponse)
+async def get_execution_mode(
+    engine: Annotated[AutonomousEngineService, Depends(get_autonomous_engine)],
+) -> Any:
+    """Return active execution mode (paper simulation vs live Binance)."""
+    return {
+        "execution_target": engine.execution_target,
+        "previous_target": None,
+        "message": (
+            "Automatic paper trading active. Real money trading halted."
+            if engine.execution_target == "paper"
+            else "LIVE Real Money Trading active on Binance USD(S)-M Futures. Paper trading paused."
+        ),
+        "binance_configured": bool(
+            engine._binance_gateway and getattr(engine._binance_gateway, "is_configured", False)
+        ),
+        "is_running": engine.is_running,
+    }
+
+
+@router.post("/execution-mode", response_model=ExecutionModeResponse)
+async def set_execution_mode(
+    request: SetExecutionModeRequest,
+    engine: Annotated[AutonomousEngineService, Depends(get_autonomous_engine)],
+    _auth: Annotated[str, Depends(require_admin_auth)] = "ok",
+) -> Any:
+    """Atomically toggle between Automatic Paper Trading and Live Binance Real Trading."""
+    try:
+        res = engine.set_execution_target(request.mode)
+        res["binance_configured"] = bool(
+            engine._binance_gateway and getattr(engine._binance_gateway, "is_configured", False)
+        )
+        res["is_running"] = engine.is_running
+        return res
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
 

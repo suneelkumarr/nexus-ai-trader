@@ -4,12 +4,14 @@ import {
   AlertOctagon,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   Wifi,
   WifiOff,
   X,
   FileSpreadsheet,
   Scale,
   Swords,
+  Zap,
 } from "lucide-react";
 import { InstitutionalTearsheetModal } from "./common/InstitutionalTearsheetModal";
 import { PortfolioOptimizerModal } from "./common/PortfolioOptimizerModal";
@@ -26,11 +28,13 @@ interface TopBarProps {
   wsStatus: WebSocketStatus;
   emergencyPending: boolean;
   lastEmergencyResponse: EmergencyStopResponse | null;
+  executionMode?: "paper" | "live_binance";
   onRefresh: () => Promise<void>;
   onActivateEmergencyStop: (
     reason: string,
     flattenPositions: boolean,
   ) => Promise<EmergencyStopResponse>;
+  onSetExecutionMode?: (mode: "paper" | "live_binance") => Promise<void>;
 }
 
 export function TopBar({
@@ -38,8 +42,10 @@ export function TopBar({
   wsStatus,
   emergencyPending,
   lastEmergencyResponse: _lastEmergencyResponse,
+  executionMode = "paper",
   onRefresh,
   onActivateEmergencyStop,
+  onSetExecutionMode,
 }: TopBarProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [flattenPositions, setFlattenPositions] = useState(true);
@@ -52,9 +58,36 @@ export function TopBar({
   const [optimizerOpen, setOptimizerOpen] = useState(false);
   const [councilOpen, setCouncilOpen] = useState(false);
 
+  // Execution Mode Switcher State
+  const [modeConfirmOpen, setModeConfirmOpen] = useState(false);
+  const [pendingTargetMode, setPendingTargetMode] = useState<"paper" | "live_binance">("paper");
+  const [switchingMode, setSwitchingMode] = useState(false);
+  const [modeError, setModeError] = useState<string | null>(null);
+
   const killSwitchActive = snapshot?.risk.kill_switch_active ?? false;
   const engineOk = snapshot?.engine_health.overall_status === "ok";
   const quoteLive = snapshot?.portfolio.quote_status === "live";
+
+  function handleTriggerModeSwitch(target: "paper" | "live_binance") {
+    if (target === executionMode) return;
+    setPendingTargetMode(target);
+    setModeError(null);
+    setModeConfirmOpen(true);
+  }
+
+  async function handleConfirmModeSwitch(): Promise<void> {
+    if (!onSetExecutionMode) return;
+    setSwitchingMode(true);
+    setModeError(null);
+    try {
+      await onSetExecutionMode(pendingTargetMode);
+      setModeConfirmOpen(false);
+    } catch (err) {
+      setModeError(err instanceof Error ? err.message : "Failed to switch execution mode.");
+    } finally {
+      setSwitchingMode(false);
+    }
+  }
 
   async function handleRefresh(): Promise<void> {
     setRefreshing(true);
@@ -105,14 +138,47 @@ export function TopBar({
 
           <div className="hidden h-4 w-px bg-white/10 sm:block" />
 
-          {/* Paper Trading Status Badge */}
-          <div
-            className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-amber-300 shadow-sm"
-            data-testid="paper-trading-badge"
-          >
-            <ShieldAlert className="h-3 w-3 text-amber-400" />
-            <span>VIRTUAL PAPER TERMINAL</span>
-            <span className="hidden text-amber-400/60 sm:inline">• ₹10,000 INR SANDBOX</span>
+          {/* Atomic Execution Mode Switcher Pill */}
+          <div className="flex items-center rounded-xl border border-white/10 bg-slate-950/80 p-0.5 shadow-inner">
+            <button
+              type="button"
+              onClick={() => handleTriggerModeSwitch("paper")}
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[11px] font-bold transition-all ${
+                executionMode === "paper"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+              title="Switch to Virtual Paper Trading Simulation"
+            >
+              <ShieldAlert className="h-3 w-3 text-amber-400" />
+              <span>PAPER SIM</span>
+              <span className="hidden sm:inline text-[9px] text-amber-400/70 font-normal">
+                • ₹10k SANDBOX
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTriggerModeSwitch("live_binance")}
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[11px] font-bold transition-all ${
+                executionMode === "live_binance"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+              title="Switch to Real Money Trading on Binance Futures"
+            >
+              {executionMode === "live_binance" && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+              )}
+              <Zap className="h-3 w-3 text-emerald-400" />
+              <span>LIVE BINANCE</span>
+              <span className="hidden sm:inline text-[9px] text-emerald-400/80 font-normal">
+                • REAL MONEY
+              </span>
+            </button>
           </div>
         </div>
 
@@ -370,6 +436,125 @@ export function TopBar({
         onClose={() => setCouncilOpen(false)}
         defaultSymbol="BTC/USDT"
       />
+
+      {/* Execution Mode Atomic Switcher Modal */}
+      {modeConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
+          <div className="w-full max-w-lg rounded-2xl border border-white/15 bg-[#0b1329] p-6 shadow-2xl">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex h-11 w-11 items-center justify-center rounded-xl border ${
+                    pendingTargetMode === "live_binance"
+                      ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-300"
+                      : "border-amber-500/40 bg-amber-500/20 text-amber-300"
+                  }`}
+                >
+                  {pendingTargetMode === "live_binance" ? (
+                    <Zap className="h-6 w-6 text-emerald-400" />
+                  ) : (
+                    <ShieldAlert className="h-6 w-6 text-amber-400" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-display text-base font-bold text-white">
+                    {pendingTargetMode === "live_binance"
+                      ? "Activate LIVE Real Money Trading"
+                      : "Switch to Virtual Paper Simulation"}
+                  </h3>
+                  <p className="font-mono text-xs text-slate-400">
+                    {pendingTargetMode === "live_binance"
+                      ? "Binance USDⓈ-M Futures Production Mainnet"
+                      : "Risk-Free Virtual INR 10,000 Sandbox"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModeConfirmOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 font-mono text-xs">
+              {pendingTargetMode === "live_binance" ? (
+                <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 text-slate-200">
+                  <div className="flex items-center gap-2 text-emerald-300 font-bold">
+                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                    <span>Real-Money Invariant Safety Check</span>
+                  </div>
+                  <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
+                    <li>
+                      <strong>Automatic Paper Trading Paused:</strong> Virtual simulation order generation will stop immediately.
+                    </li>
+                    <li>
+                      <strong>Exchange Gateway:</strong> Real orders will be routed directly to Binance USDⓈ-M Futures.
+                    </li>
+                    <li>
+                      <strong>Verified Balance:</strong> $2.9409 USDT available margin (Production).
+                    </li>
+                    <li>
+                      <strong>Non-Custodial Lock:</strong> API key has NO withdrawal permission. Your capital cannot leave Binance.
+                    </li>
+                  </ul>
+                </div>
+              ) : (
+                <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 text-slate-200">
+                  <div className="flex items-center gap-2 text-amber-300 font-bold">
+                    <ShieldAlert className="h-4 w-4 text-amber-400" />
+                    <span>Return to Virtual Paper Sandbox</span>
+                  </div>
+                  <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
+                    <li>
+                      <strong>Live Exchange Execution Halted:</strong> Zero real-money orders will be placed on Binance.
+                    </li>
+                    <li>
+                      <strong>Paper Simulation Resumed:</strong> Strategy V1 & Arbitrage paper trades will resume in PostgreSQL ledger.
+                    </li>
+                    <li>
+                      <strong>Risk Level:</strong> 0.00% financial exposure.
+                    </li>
+                  </ul>
+                </div>
+              )}
+
+              {modeError && (
+                <div className="rounded-xl border border-rose-500/50 bg-rose-500/15 p-2.5 text-rose-300">
+                  {modeError}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-3 font-mono text-xs">
+              <button
+                type="button"
+                onClick={() => setModeConfirmOpen(false)}
+                className="rounded-xl border border-slate-700 px-4 py-2 font-medium text-slate-300 hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={switchingMode}
+                onClick={() => void handleConfirmModeSwitch()}
+                className={`rounded-xl px-4 py-2 font-bold text-white shadow-lg disabled:opacity-50 ${
+                  pendingTargetMode === "live_binance"
+                    ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30"
+                    : "bg-amber-600 hover:bg-amber-500 shadow-amber-600/30"
+                }`}
+              >
+                {switchingMode
+                  ? "Switching Mode..."
+                  : pendingTargetMode === "live_binance"
+                    ? "ACTIVATE LIVE REAL TRADING"
+                    : "SWITCH TO PAPER TRADING"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

@@ -54,6 +54,16 @@ def mock_engine() -> MagicMock:
         "top_alpha_picks": [],
         "updated_at": "2026-11-12T18:00:00Z",
     }
+    engine.execution_target = "paper"
+    engine.is_running = True
+    engine._binance_gateway = MagicMock(is_configured=True)
+    engine.set_execution_target = MagicMock(
+        return_value={
+            "execution_target": "live_binance",
+            "previous_target": "paper",
+            "message": "LIVE Real Money Trading active on Binance USD(S)-M Futures. Paper trading simulation paused.",
+        }
+    )
     engine._refresh_ai_research = AsyncMock(return_value=engine.latest_ai_research)
     return engine
 
@@ -101,3 +111,24 @@ def test_autonomous_toggle_and_cycle(test_client: TestClient) -> None:
     ai_data = ai_res.json()
     assert ai_data["macro_regime"] == "BULLISH_EXPANSION"
     assert ai_data["sentiment_index"] == 75
+
+
+def test_autonomous_execution_mode_endpoints(test_client: TestClient) -> None:
+    headers = {"Authorization": "Bearer nexus_sec_admin_7f9b8a3e4c1d2e5a6f8b"}
+
+    # Get active execution mode
+    get_res = test_client.get("/api/v1/autonomous/execution-mode")
+    assert get_res.status_code == 200
+    data = get_res.json()
+    assert data["execution_target"] == "paper"
+    assert "paper" in data["message"].lower()
+
+    # Set execution mode to live_binance
+    post_res = test_client.post(
+        "/api/v1/autonomous/execution-mode",
+        json={"mode": "live_binance"},
+        headers=headers,
+    )
+    assert post_res.status_code == 200
+    post_data = post_res.json()
+    assert post_data["execution_target"] == "live_binance"

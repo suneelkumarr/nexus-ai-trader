@@ -320,3 +320,25 @@ async def test_terminal_candles_series_endpoint(tmp_path: Path) -> None:
     finally:
         await db_manager.dispose()
 
+
+@pytest.mark.asyncio
+async def test_terminal_earnings_breakdown_endpoint(tmp_path: Path) -> None:
+    db_path = tmp_path / "earnings.db"
+    feed = _StubMarketFeed(fail=False)
+    app, db_manager, _ = await _make_test_app(
+        f"sqlite+aiosqlite:///{db_path.as_posix()}", feed=feed
+    )
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/v1/terminal/earnings-breakdown")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "execution_mode" in data
+            assert "paper_portfolio" in data
+            assert "live_binance" in data
+            assert data["paper_portfolio"]["initial_capital_inr"] == 10000.0
+            assert isinstance(data["paper_portfolio"]["assets"], list)
+    finally:
+        await db_manager.dispose()
+

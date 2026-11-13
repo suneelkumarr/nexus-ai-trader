@@ -22,6 +22,7 @@ import {
   fetchAutonomousStatus,
   fetchTerminalSettings,
   refreshAIResearch,
+  setExecutionMode,
   toggleAutonomousEngine,
   triggerAutonomousCycle,
 } from "./services/apiClient";
@@ -39,6 +40,7 @@ export function App() {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [engineStatus, setEngineStatus] = useState<AutonomousEngineStatus | null>(null);
   const [aiBriefing, setAiBriefing] = useState<AIResearchBriefing | null>(null);
+  const [executionMode, setExecutionModeState] = useState<"paper" | "live_binance">("paper");
   const futuresEnabled = settings?.paper_futures_enabled ?? true;
 
   const {
@@ -92,6 +94,9 @@ export function App() {
         if (!cancelled) {
           setEngineStatus(eng);
           setAiBriefing(ai);
+          if (eng.execution_target) {
+            setExecutionModeState(eng.execution_target);
+          }
         }
       } catch {
         // Silently handled
@@ -125,6 +130,14 @@ export function App() {
     setAiBriefing(ai);
   }
 
+  async function handleSetExecutionMode(targetMode: "paper" | "live_binance"): Promise<void> {
+    const res = await setExecutionMode(targetMode);
+    setExecutionModeState(res.execution_target);
+    const eng = await fetchAutonomousStatus();
+    setEngineStatus(eng);
+    await refresh();
+  }
+
   return (
     <div className="nexus-grid-bg flex min-h-screen flex-col bg-nexus-void text-slate-100">
       <TopBar
@@ -132,8 +145,10 @@ export function App() {
         wsStatus={wsStatus}
         emergencyPending={emergencyPending}
         lastEmergencyResponse={lastEmergencyResponse}
+        executionMode={executionMode}
         onRefresh={refresh}
         onActivateEmergencyStop={activateEmergencyStop}
+        onSetExecutionMode={handleSetExecutionMode}
       />
 
       <div className="flex flex-1 flex-col lg:flex-row">
@@ -163,8 +178,10 @@ export function App() {
                   {/* Mission Control HUD */}
                   <AutonomousMissionControlBar
                     status={engineStatus}
+                    executionMode={executionMode}
                     onForceCycle={handleForceCycle}
                     onToggleEngine={handleToggleEngine}
+                    onToggleMode={handleSetExecutionMode}
                   />
 
                   {/* CrowLLM Live AI Quantitative Market Research Deck */}

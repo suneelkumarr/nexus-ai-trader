@@ -106,6 +106,7 @@ class AutonomousEngineService:
         self._recent_evaluated: list[str] = []
         self._recent_opportunities: list[dict[str, Any]] = []
         self._recent_orders: list[str] = []
+        self._execution_target: str = "paper"
 
         # Latest cached intelligence
         self._latest_ai_research: dict[str, Any] = {
@@ -135,6 +136,34 @@ class AutonomousEngineService:
     @property
     def latest_ai_research(self) -> dict[str, Any]:
         return self._latest_ai_research
+
+    @property
+    def execution_target(self) -> str:
+        return self._execution_target
+
+    def set_execution_target(self, mode: str) -> dict[str, Any]:
+        """Switch execution target between 'paper' and 'live_binance'."""
+        clean_mode = mode.lower().strip()
+        if clean_mode not in ("paper", "live_binance"):
+            raise ValueError(f"Invalid execution mode '{mode}'. Must be 'paper' or 'live_binance'.")
+        if clean_mode == "live_binance":
+            if not self._binance_gateway or not getattr(self._binance_gateway, "is_configured", False):
+                raise ValueError(
+                    "Binance API credentials are not configured. Configure API Key & Secret in Settings before enabling Real Money Trading."
+                )
+
+        previous_mode = self._execution_target
+        self._execution_target = clean_mode
+        logger.info("autonomous_execution_target_switched", previous=previous_mode, current=clean_mode)
+        return {
+            "execution_target": self._execution_target,
+            "previous_target": previous_mode,
+            "message": (
+                "Automatic paper trading active. Real money trading halted."
+                if clean_mode == "paper"
+                else "LIVE Real Money Trading active on Binance USD(S)-M Futures. Paper trading simulation paused."
+            ),
+        }
 
     async def start(self) -> None:
         """Start autonomous background trading and market research loops."""
@@ -223,6 +252,8 @@ class AutonomousEngineService:
             "recently_evaluated_symbols": self._recent_evaluated[-15:],
             "recent_opportunities": self._recent_opportunities[:8],
             "recent_orders_placed": self._recent_orders[-10:],
+            "execution_target": self._execution_target,
+            "binance_configured": bool(self._binance_gateway and getattr(self._binance_gateway, "is_configured", False)),
         }
 
     # -------------------------------------------------------------------------
@@ -428,115 +459,142 @@ class AutonomousEngineService:
                     )
                     continue
 
-                # 1. Spot Order Execution (Buy/Sell)
-                try:
-                    order = await self._broker.execute_strategy_signal(
-                        portfolio.id, eval_result.signal, now_utc=now_utc
-                    )
-                    if order.status.value == "filled":
-                        self._strategy_trades_count += 1
-                        desc = f"SPOT {order.side.value.upper()} {symbol}"
-                        orders_placed.append(desc)
-                        exec_price = order.fill.executed_price_usdt if order.fill else "MKT"
-                        self._recent_orders.append(f"{desc} @ {exec_price}")
-                except Exception as exc:
-                    logger.warning("autonomous_order_exec_failed", symbol=symbol, error=str(exc))
-
-                # 2. Futures Order Execution (Simulated USDT-M Perpetuals)
-                if self._futures_broker is not None:
+                if self._execution_target == "paper":
+                    # 1. Spot Order Execution (Buy/Sell) in Paper Simulation Mode
                     try:
-                        fut_positions = await self._futures_broker.get_open_positions()
-                        has_fut_pos = any(
-                            p.symbol == symbol and getattr(p.status, "value", p.status) == "open"
-                            for p in fut_positions
+                        order = await self._broker.execute_strategy_signal(
+                            portfolio.id, eval_result.signal, now_utc=now_utc
                         )
-                        if not has_fut_pos:
+                        if order.status.value == "filled":
+                            self._strategy_trades_count += 1
+                            desc = f"PAPER SPOT {order.side.value.upper()} {symbol}"
+                            orders_placed.append(desc)
+                            exec_price = order.fill.executed_price_usdt if order.fill else "MKT"
+                            self._recent_orders.append(f"{desc} @ {exec_price}")
+                    except Exception as exc:
+                        logger.warning("autonomous_order_exec_failed", symbol=symbol, error=str(exc))
+
+                    # 2. Futures Order Execution (Simulated USDT-M Perpetuals)
+                    if self._futures_broker is not None:
+                        try:
+                            fut_positions = await self._futures_broker.get_open_positions()
+                            has_fut_pos = any(
+                                p.symbol == symbol and getattr(p.status, "value", p.status) == "open"
+                                for p in fut_positions
+                            )
+                            if not has_fut_pos:
+                                sig_dir = getattr(
+                                    eval_result.signal.direction, "value", eval_result.signal.direction
+                                ).upper()
+                                action = (
+                                    FuturesOrderAction.OPEN_LONG
+                                    if sig_dir == "BUY"
+                                    else FuturesOrderAction.OPEN_SHORT
+                                )
+                                last_p = Decimal(str(bars[-1].close))
+                                if last_p > Decimal("0"):
+                                    notional_usd = Decimal("100.0")
+                                    qty = (notional_usd / last_p).quantize(Decimal("0.0001"))
+                                    if qty > Decimal("0"):
+                                        sl_price = (
+                                            (last_p * Decimal("0.97")).quantize(Decimal("0.0001"))
+                                            if action == FuturesOrderAction.OPEN_LONG
+                                            else (last_p * Decimal("1.03")).quantize(Decimal("0.0001"))
+                                        )
+                                        tp_price = (
+                                            (last_p * Decimal("1.06")).quantize(Decimal("0.0001"))
+                                            if action == FuturesOrderAction.OPEN_LONG
+                                            else (last_p * Decimal("0.94")).quantize(Decimal("0.0001"))
+                                        )
+                                        fut_order = await self._futures_broker.submit_order(
+                                            FuturesOrderRequest(
+                                                symbol=symbol,
+                                                action=action,
+                                                quantity=qty,
+                                                leverage=2,
+                                                stop_loss_price=sl_price,
+                                                take_profit_price=tp_price,
+                                            )
+                                        )
+                                        if (
+                                            getattr(fut_order.status, "value", fut_order.status)
+                                            == "filled"
+                                        ):
+                                            self._strategy_trades_count += 1
+                                            desc = f"PAPER FUTURES {action.value} {symbol}"
+                                            orders_placed.append(desc)
+                                            self._recent_orders.append(
+                                                f"{desc} @ {fut_order.executed_price}"
+                                            )
+                                            logger.info(
+                                                "autonomous_futures_order_filled",
+                                                symbol=symbol,
+                                                action=action.value,
+                                                qty=str(qty),
+                                                price=str(fut_order.executed_price),
+                                            )
+                        except Exception as f_err:
+                            logger.debug(
+                                "autonomous_futures_auto_exec_error", symbol=symbol, error=str(f_err)
+                            )
+                elif self._execution_target == "live_binance":
+                    # LIVE BINANCE REAL MONEY ROUTING (Paper Trading Paused)
+                    if (
+                        self._binance_gateway is not None
+                        and getattr(self._binance_gateway, "is_configured", False)
+                    ):
+                        try:
                             sig_dir = getattr(
                                 eval_result.signal.direction, "value", eval_result.signal.direction
                             ).upper()
-                            action = (
-                                FuturesOrderAction.OPEN_LONG
-                                if sig_dir == "BUY"
-                                else FuturesOrderAction.OPEN_SHORT
-                            )
+                            side_str = "BUY" if sig_dir == "BUY" else "SELL"
                             last_p = Decimal(str(bars[-1].close))
                             if last_p > Decimal("0"):
-                                notional_usd = Decimal("100.0")
-                                qty = (notional_usd / last_p).quantize(Decimal("0.0001"))
+                                # Sizing: calculate based on account available USDT (e.g. 5.5 USDT notional)
+                                notional_usd = Decimal("5.5")
+                                qty = (notional_usd / last_p).quantize(Decimal("0.001"))
                                 if qty > Decimal("0"):
                                     sl_price = (
                                         (last_p * Decimal("0.97")).quantize(Decimal("0.0001"))
-                                        if action == FuturesOrderAction.OPEN_LONG
+                                        if side_str == "BUY"
                                         else (last_p * Decimal("1.03")).quantize(Decimal("0.0001"))
                                     )
                                     tp_price = (
                                         (last_p * Decimal("1.06")).quantize(Decimal("0.0001"))
-                                        if action == FuturesOrderAction.OPEN_LONG
+                                        if side_str == "BUY"
                                         else (last_p * Decimal("0.94")).quantize(Decimal("0.0001"))
                                     )
-                                    fut_order = await self._futures_broker.submit_order(
-                                        FuturesOrderRequest(
-                                            symbol=symbol,
-                                            action=action,
-                                            quantity=qty,
-                                            leverage=2,
-                                            stop_loss_price=sl_price,
-                                            take_profit_price=tp_price,
-                                        )
+                                    live_res = await self._binance_gateway.place_order(
+                                        symbol=symbol,
+                                        side=side_str,
+                                        quantity=qty,
+                                        leverage=2,
+                                        stop_loss_price=sl_price,
+                                        take_profit_price=tp_price,
                                     )
-                                    if (
-                                        getattr(fut_order.status, "value", fut_order.status)
-                                        == "filled"
-                                    ):
+                                    if "error" not in live_res:
                                         self._strategy_trades_count += 1
-                                        desc = f"FUTURES {action.value} {symbol}"
+                                        desc = f"LIVE BINANCE {side_str} {symbol}"
                                         orders_placed.append(desc)
-                                        self._recent_orders.append(
-                                            f"{desc} @ {fut_order.executed_price}"
-                                        )
+                                        self._recent_orders.append(f"{desc} (qty={qty})")
                                         logger.info(
-                                            "autonomous_futures_order_filled",
+                                            "binance_futures_order_routed",
                                             symbol=symbol,
-                                            action=action.value,
+                                            side=side_str,
                                             qty=str(qty),
-                                            price=str(fut_order.executed_price),
                                         )
-
-                                        # Route to Binance Futures Official Connector when configured
-                                        if (
-                                            self._binance_gateway is not None
-                                            and self._binance_gateway.is_configured
-                                        ):
-                                            try:
-                                                side_str = (
-                                                    "BUY"
-                                                    if action == FuturesOrderAction.OPEN_LONG
-                                                    else "SELL"
-                                                )
-                                                await self._binance_gateway.place_order(
-                                                    symbol=symbol,
-                                                    side=side_str,
-                                                    quantity=qty,
-                                                    leverage=2,
-                                                    stop_loss_price=sl_price,
-                                                    take_profit_price=tp_price,
-                                                )
-                                                logger.info(
-                                                    "binance_futures_order_routed",
-                                                    symbol=symbol,
-                                                    side=side_str,
-                                                    qty=str(qty),
-                                                )
-                                            except Exception as bg_err:
-                                                logger.warning(
-                                                    "binance_gateway_order_failed",
-                                                    symbol=symbol,
-                                                    error=str(bg_err),
-                                                )
-                    except Exception as f_err:
-                        logger.debug(
-                            "autonomous_futures_auto_exec_error", symbol=symbol, error=str(f_err)
-                        )
+                                    else:
+                                        logger.warning(
+                                            "binance_gateway_order_failed",
+                                            symbol=symbol,
+                                            error=live_res.get("error"),
+                                        )
+                        except Exception as bg_err:
+                            logger.warning(
+                                "binance_gateway_order_failed",
+                                symbol=symbol,
+                                error=str(bg_err),
+                            )
 
         self._recent_evaluated = evaluated
         self._recent_orders = self._recent_orders[-25:]
@@ -566,6 +624,9 @@ class AutonomousEngineService:
 
     async def _evaluate_arbitrage_cycle(self) -> dict[str, Any]:
         """Scan 54 markets and execute paper arbitrage if profitable after roundtrip fee."""
+        if self._execution_target != "paper":
+            return {"status": "PAUSED_FOR_LIVE_MODE", "mode": self._execution_target}
+
         tickers = await self._scanner.scan_markets()
         if not tickers:
             return {"status": "NO_TICKERS"}

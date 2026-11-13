@@ -279,6 +279,12 @@ class PaperLedgerRepository(Protocol):
         """List closed trade ledger entries chronologically."""
         ...
 
+    async def get_earnings_breakdown(
+        self, portfolio_id: UUID, inr_per_usdt: Decimal = Decimal("85.00")
+    ) -> dict[str, Any]:
+        """Calculate complete asset-by-asset and portfolio earnings audit."""
+        ...
+
 
 @runtime_checkable
 class AIAnalysisClient(Protocol):

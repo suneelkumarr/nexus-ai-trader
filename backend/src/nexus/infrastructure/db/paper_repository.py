@@ -2,9 +2,10 @@
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -660,3 +661,143 @@ class SqlAlchemyPaperRepository:
                 )
                 for r in rows
             ]
+
+    async def get_earnings_breakdown(
+        self, portfolio_id: UUID, inr_per_usdt: Decimal = Decimal("85.00")
+    ) -> dict[str, Any]:
+        """Return granular asset-by-asset breakdown and portfolio totals down to the exact paisa."""
+        async with self._session_factory() as session:
+            stmt = (
+                select(
+                    TradeLedgerORM.symbol,
+                    func.count().label("total_trades"),
+                    func.count(case((TradeLedgerORM.realized_pnl_inr > 0, 1))).label("win_count"),
+                    func.count(case((TradeLedgerORM.realized_pnl_inr < 0, 1))).label("loss_count"),
+                    func.count(case((TradeLedgerORM.realized_pnl_inr == 0, 1))).label("breakeven_count"),
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (TradeLedgerORM.realized_pnl_inr > 0, TradeLedgerORM.realized_pnl_inr),
+                                else_=Decimal("0"),
+                            )
+                        ),
+                        Decimal("0"),
+                    ).label("gross_profit_inr"),
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (TradeLedgerORM.realized_pnl_inr < 0, func.abs(TradeLedgerORM.realized_pnl_inr)),
+                                else_=Decimal("0"),
+                            )
+                        ),
+                        Decimal("0"),
+                    ).label("gross_loss_inr"),
+                    func.coalesce(func.sum(TradeLedgerORM.total_fees_inr), Decimal("0")).label("total_fees_inr"),
+                    func.coalesce(func.sum(TradeLedgerORM.realized_pnl_inr), Decimal("0")).label("net_realized_pnl_inr"),
+                    func.coalesce(func.sum(TradeLedgerORM.entry_cost_inr), Decimal("0")).label("total_volume_inr"),
+                    func.max(TradeLedgerORM.closed_at).label("last_trade_at"),
+                )
+                .where(TradeLedgerORM.portfolio_id == portfolio_id)
+                .group_by(TradeLedgerORM.symbol)
+                .order_by(func.sum(TradeLedgerORM.realized_pnl_inr).desc())
+            )
+            rows = (await session.execute(stmt)).all()
+
+            port_row = (
+                await session.execute(
+                    select(PortfolioORM).where(PortfolioORM.id == portfolio_id)
+                )
+            ).scalar_one_or_none()
+
+            initial_cap = port_row.initial_capital_inr if port_row else Decimal("10000.00")
+            cash_bal = port_row.cash_balance_inr if port_row else Decimal("10000.00")
+
+            safe_rate = inr_per_usdt if inr_per_usdt > Decimal("0") else Decimal("85.00")
+
+            total_trades = 0
+            total_wins = 0
+            total_losses = 0
+            total_gross_profit = Decimal("0")
+            total_gross_loss = Decimal("0")
+            total_fees = Decimal("0")
+            total_net_pnl = Decimal("0")
+            total_volume = Decimal("0")
+
+            assets_breakdown = []
+            for r in rows:
+                sym_trades = int(r.total_trades)
+                sym_wins = int(r.win_count)
+                sym_losses = int(r.loss_count)
+                sym_gross_profit = Decimal(str(r.gross_profit_inr))
+                sym_gross_loss = Decimal(str(r.gross_loss_inr))
+                sym_fees = Decimal(str(r.total_fees_inr))
+                sym_net_pnl = Decimal(str(r.net_realized_pnl_inr))
+                sym_volume = Decimal(str(r.total_volume_inr))
+                sym_win_rate = round((sym_wins / sym_trades * 100.0), 2) if sym_trades > 0 else 0.0
+
+                total_trades += sym_trades
+                total_wins += sym_wins
+                total_losses += sym_losses
+                total_gross_profit += sym_gross_profit
+                total_gross_loss += sym_gross_loss
+                total_fees += sym_fees
+                total_net_pnl += sym_net_pnl
+                total_volume += sym_volume
+
+                is_arb = (
+                    ("/" in r.symbol and not r.symbol.endswith("/USDT"))
+                    or ("BTC" in r.symbol and "ETH" in r.symbol)
+                    or ("SOL" in r.symbol and "ETH" in r.symbol)
+                    or ("BNB" in r.symbol and "BTC" in r.symbol)
+                )
+                strategy_type = "Triangular Arbitrage" if is_arb else "Strategy Spot V1/V2"
+
+                assets_breakdown.append({
+                    "symbol": r.symbol,
+                    "trade_type": strategy_type,
+                    "total_trades": sym_trades,
+                    "winning_trades": sym_wins,
+                    "losing_trades": sym_losses,
+                    "win_rate_pct": sym_win_rate,
+                    "gross_profit_inr": float(sym_gross_profit),
+                    "gross_loss_inr": float(sym_gross_loss),
+                    "total_fees_inr": float(sym_fees),
+                    "net_realized_pnl_inr": float(sym_net_pnl),
+                    "net_realized_pnl_usdt": round(float(sym_net_pnl / safe_rate), 4),
+                    "total_volume_inr": float(sym_volume),
+                    "last_trade_at": r.last_trade_at.isoformat() if r.last_trade_at else None,
+                })
+
+            for asset in assets_breakdown:
+                if total_net_pnl > Decimal("0") and asset["net_realized_pnl_inr"] > 0:
+                    asset["profit_share_pct"] = round(
+                        float(Decimal(str(asset["net_realized_pnl_inr"])) / total_net_pnl * Decimal("100.0")), 2
+                    )
+                else:
+                    asset["profit_share_pct"] = 0.0
+
+            overall_win_rate = round((total_wins / total_trades * 100.0), 2) if total_trades > 0 else 0.0
+            profit_factor = (
+                round(float(total_gross_profit / total_gross_loss), 2)
+                if total_gross_loss > Decimal("0")
+                else (999.99 if total_gross_profit > Decimal("0") else 0.0)
+            )
+
+            return {
+                "portfolio_id": str(portfolio_id),
+                "inr_per_usdt": float(safe_rate),
+                "initial_capital_inr": float(initial_cap),
+                "cash_balance_inr": float(cash_bal),
+                "total_trades": total_trades,
+                "winning_trades": total_wins,
+                "losing_trades": total_losses,
+                "win_rate_pct": overall_win_rate,
+                "profit_factor": profit_factor,
+                "total_gross_profit_inr": float(total_gross_profit),
+                "total_gross_loss_inr": float(total_gross_loss),
+                "total_fees_inr": float(total_fees),
+                "net_realized_pnl_inr": float(total_net_pnl),
+                "net_realized_pnl_usdt": round(float(total_net_pnl / safe_rate), 4),
+                "total_volume_inr": float(total_volume),
+                "assets": assets_breakdown,
+            }

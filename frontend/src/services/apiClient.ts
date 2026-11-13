@@ -419,3 +419,40 @@ export async function saveBinanceCredentials(
     },
   );
 }
+
+export async function fetchEarningsBreakdown(
+  signal?: AbortSignal,
+): Promise<import("../types/system").EarningsBreakdownResponse> {
+  return requestJson<import("../types/system").EarningsBreakdownResponse>(
+    "/api/v1/terminal/earnings-breakdown",
+    {
+      method: "GET",
+      signal,
+    },
+  );
+}
+
+export async function fetchExecutionMode(
+  signal?: AbortSignal,
+): Promise<import("../types/system").ExecutionModeResponse> {
+  return requestJson<import("../types/system").ExecutionModeResponse>(
+    "/api/v1/autonomous/execution-mode",
+    {
+      method: "GET",
+      signal,
+    },
+  );
+}
+
+export async function setExecutionMode(
+  mode: "paper" | "live_binance",
+): Promise<import("../types/system").ExecutionModeResponse> {
+  return requestJson<import("../types/system").ExecutionModeResponse>(
+    "/api/v1/autonomous/execution-mode",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    },
+  );
+}

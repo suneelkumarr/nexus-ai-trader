@@ -391,6 +391,72 @@ export interface AutonomousEngineStatus {
   recently_evaluated_symbols?: string[];
   recent_opportunities?: MarketOpportunityItem[];
   recent_orders_placed?: string[];
+  execution_target?: "paper" | "live_binance";
+  binance_configured?: boolean;
+}
+
+export interface AssetEarningsItem {
+  symbol: string;
+  trade_type: string;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate_pct: number;
+  gross_profit_inr: number;
+  gross_loss_inr: number;
+  total_fees_inr: number;
+  net_realized_pnl_inr: number;
+  net_realized_pnl_usdt: number;
+  total_volume_inr: number;
+  profit_share_pct: number;
+  last_trade_at: string | null;
+}
+
+export interface PaperPortfolioEarningsSummary {
+  portfolio_id: string;
+  inr_per_usdt: number;
+  initial_capital_inr: number;
+  cash_balance_inr: number;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate_pct: number;
+  profit_factor: number;
+  total_gross_profit_inr: number;
+  total_gross_loss_inr: number;
+  total_fees_inr: number;
+  net_realized_pnl_inr: number;
+  net_realized_pnl_usdt: number;
+  total_volume_inr: number;
+  assets: AssetEarningsItem[];
+}
+
+export interface LiveBinanceAccountSummary {
+  is_configured: boolean;
+  is_testnet: boolean;
+  wallet_balance_usdt: number;
+  wallet_balance_inr: number;
+  available_balance_usdt: number;
+  open_positions_count: number;
+  can_trade: boolean;
+  can_withdraw: boolean;
+  safety_lock_passed: boolean;
+  environment: string;
+}
+
+export interface EarningsBreakdownResponse {
+  execution_mode: "paper" | "live_binance";
+  paper_portfolio: PaperPortfolioEarningsSummary;
+  live_binance: LiveBinanceAccountSummary;
+  timestamp: string;
+}
+
+export interface ExecutionModeResponse {
+  execution_target: "paper" | "live_binance";
+  previous_target?: string | null;
+  message: string;
+  binance_configured: boolean;
+  is_running: boolean;
 }
 
 export interface AssetStatistics {

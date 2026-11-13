@@ -1,22 +1,28 @@
 import { useState } from "react";
-import { Activity, Play, Pause, RefreshCw, Zap, Cpu } from "lucide-react";
+import { Activity, Play, Pause, RefreshCw, Zap, Cpu, ShieldAlert } from "lucide-react";
 import type { AutonomousEngineStatus } from "../types/system";
 
 interface AutonomousMissionControlBarProps {
   status: AutonomousEngineStatus | null;
+  executionMode?: "paper" | "live_binance";
   onForceCycle: () => Promise<void>;
   onToggleEngine: () => Promise<void>;
+  onToggleMode?: (target: "paper" | "live_binance") => Promise<void>;
 }
 
 export function AutonomousMissionControlBar({
   status,
+  executionMode = "paper",
   onForceCycle,
   onToggleEngine,
+  onToggleMode,
 }: AutonomousMissionControlBarProps) {
   const [cycling, setCycling] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [switchingMode, setSwitchingMode] = useState(false);
 
   const isRunning = status?.is_running ?? true;
+  const activeMode = status?.execution_target ?? executionMode;
 
   async function handleCycle() {
     setCycling(true);
@@ -33,6 +39,17 @@ export function AutonomousMissionControlBar({
       await onToggleEngine();
     } finally {
       setToggling(false);
+    }
+  }
+
+  async function handleSwitchTarget() {
+    if (!onToggleMode) return;
+    setSwitchingMode(true);
+    try {
+      const target = activeMode === "paper" ? "live_binance" : "paper";
+      await onToggleMode(target);
+    } finally {
+      setSwitchingMode(false);
     }
   }
 
@@ -70,9 +87,16 @@ export function AutonomousMissionControlBar({
               >
                 {isRunning ? "ONLINE 24/7" : "STANDBY"}
               </span>
-              <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-[9px] font-semibold text-cyan-300">
-                PAPER SECURE
-              </span>
+              {activeMode === "live_binance" ? (
+                <span className="rounded-full border border-emerald-500/40 bg-emerald-500/20 px-2 py-0.5 font-mono text-[9px] font-bold text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.4)] flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  REAL MONEY LIVE
+                </span>
+              ) : (
+                <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-[9px] font-semibold text-cyan-300">
+                  PAPER SECURE
+                </span>
+              )}
             </div>
             <div className="font-mono text-[11px] text-slate-400 mt-0.5">
               Multi-Asset Scanner · 110+ Binance Spot & Futures Markets · Spot Buy & Futures Long/Short Dual Execution
@@ -118,6 +142,36 @@ export function AutonomousMissionControlBar({
 
         {/* Right: Operational Control Buttons */}
         <div className="flex items-center gap-2.5">
+          {onToggleMode && (
+            <button
+              type="button"
+              disabled={switchingMode}
+              onClick={handleSwitchTarget}
+              className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 font-mono text-xs font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 ${
+                activeMode === "live_binance"
+                  ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300 shadow-emerald-950/40 hover:bg-emerald-500/30"
+                  : "border-amber-500/40 bg-amber-500/15 text-amber-300 shadow-amber-950/30 hover:bg-amber-500/25"
+              }`}
+              title={
+                activeMode === "live_binance"
+                  ? "Live Binance Active. Click to switch to Paper Simulation."
+                  : "Paper Simulation Active. Click to switch to Live Binance Real Money."
+              }
+            >
+              {activeMode === "live_binance" ? (
+                <>
+                  <Zap className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>TARGET: LIVE REAL</span>
+                </>
+              ) : (
+                <>
+                  <ShieldAlert className="h-3.5 w-3.5 text-amber-400" />
+                  <span>TARGET: PAPER SIM</span>
+                </>
+              )}
+            </button>
+          )}
+
           <button
             type="button"
             disabled={cycling}
