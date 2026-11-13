@@ -204,6 +204,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "Accept",
             "X-Request-ID",
             "X-Nexus-API-Key",
+            "X-API-Key",
         ],
     )
 

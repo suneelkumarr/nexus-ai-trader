@@ -77,10 +77,20 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     log_format: Literal["json", "console"] = "json"
     cors_origins: list[str] = Field(
-        default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"]
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://localhost:4173",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:4173",
+            "https://nexus-ai-trader.pages.dev",
+        ]
     )
-    # Narrow by default; set to an empty string to disable regex matching entirely.
-    cors_origin_regex: str = r"^https://nexus-ai-trader[a-z0-9-]*\.onrender\.com$"
+    # Allows Cloudflare Pages deployments (*.pages.dev), Render (*.onrender.com), and local hosts
+    cors_origin_regex: str = (
+        r"^(https://([a-z0-9-]+\.)?(pages\.dev|onrender\.com)|http://(localhost|127\.0\.0\.1)(:\d+)?)$"
+    )
     trust_proxy_headers: bool = False
     api_auth_token: SecretStr = Field(default=SecretStr(""))
     rate_limit_per_minute: int = Field(default=120, ge=10, le=10000)

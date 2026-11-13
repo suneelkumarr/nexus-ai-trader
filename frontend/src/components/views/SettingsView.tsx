@@ -22,7 +22,14 @@ import {
   Check,
 } from "lucide-react";
 import { fetchHealthStatus, fetchTerminalSettings } from "../../services/apiClient";
-import { getAuthToken, setAuthToken, DEFAULT_API_AUTH_TOKEN } from "../../config/env";
+import {
+  getAuthToken,
+  setAuthToken,
+  DEFAULT_API_AUTH_TOKEN,
+  getApiBaseUrl,
+  setApiBaseUrl,
+  DEFAULT_API_BASE_URL,
+} from "../../config/env";
 import type { HealthResponse, SanitizedSettingsResponse } from "../../types/system";
 import { formatInr } from "../../utils/format";
 
@@ -41,7 +48,8 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
 
-  // Authentication token configuration state
+  // Authentication token & API base URL configuration state
+  const [baseUrlInput, setBaseUrlInput] = useState<string>(() => getApiBaseUrl());
   const [tokenInput, setTokenInput] = useState<string>(() => getAuthToken());
   const [showToken, setShowToken] = useState<boolean>(false);
   const [copiedToken, setCopiedToken] = useState<boolean>(false);
@@ -49,15 +57,18 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
   const [testAuthDetail, setTestAuthDetail] = useState<string>("");
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
 
-  const handleSaveToken = () => {
+  const handleSaveConnection = () => {
     setAuthToken(tokenInput);
+    setApiBaseUrl(baseUrlInput);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
   };
 
-  const handleResetToken = () => {
+  const handleResetConnection = () => {
     setTokenInput(DEFAULT_API_AUTH_TOKEN);
     setAuthToken(DEFAULT_API_AUTH_TOKEN);
+    setBaseUrlInput(DEFAULT_API_BASE_URL);
+    setApiBaseUrl(DEFAULT_API_BASE_URL);
     setSavedSuccess(true);
     setTestAuthStatus("idle");
     setTimeout(() => setSavedSuccess(false), 2500);
@@ -68,9 +79,10 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
     setTestAuthDetail("");
     try {
       setAuthToken(tokenInput);
+      setApiBaseUrl(baseUrlInput);
       await fetchTerminalSettings();
       setTestAuthStatus("success");
-      setTestAuthDetail("Authentication Handshake Verified · HTTP 200 OK (Full Access Granted)");
+      setTestAuthDetail("Backend connected and credentials verified · HTTP 200 OK (Full Access Granted)");
     } catch (err: unknown) {
       setTestAuthStatus("failed");
       const msg = err instanceof Error ? err.message : "Handshake rejected";
@@ -232,75 +244,120 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
           Enforces cryptographic token authorization across protected mutating routes: Council of Quants Debate, AI Cycle Hunter, Risk Limit Overrides, and Emergency Circuit Breakers.
         </p>
 
-        <div className="space-y-2">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 font-mono text-xs">
-            <div className="relative flex-1">
-              <input
-                type={showToken ? "text" : "password"}
-                value={tokenInput}
-                onChange={(e) => {
-                  setTokenInput(e.target.value);
-                  setTestAuthStatus("idle");
-                }}
-                placeholder="nexus_sec_admin_..."
-                className="w-full rounded border border-slate-800 bg-nexus-void px-3 py-2 pr-20 text-xs text-white placeholder-slate-600 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400/50"
-              />
-              <div className="absolute inset-y-0 right-1 flex items-center gap-1 pr-1.5">
+        <div className="space-y-3">
+          {/* API Base URL Setting */}
+          <div className="space-y-1.5 font-mono text-xs">
+            <div className="flex items-center justify-between text-[11px] text-slate-400">
+              <span className="font-semibold text-slate-300">FastAPI Server Endpoint</span>
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setShowToken(!showToken)}
-                  title={showToken ? "Hide Key" : "Reveal Key"}
-                  className="rounded p-1 text-slate-400 hover:text-white hover:bg-slate-800/60 transition"
+                  onClick={() => {
+                    setBaseUrlInput("https://nexus-ai-trader-r2ez.onrender.com");
+                    setTestAuthStatus("idle");
+                  }}
+                  className="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:text-cyan-300 transition"
                 >
-                  {showToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  Cloud Render
                 </button>
                 <button
                   type="button"
-                  onClick={handleCopyToken}
-                  title="Copy Key to Clipboard"
-                  className="rounded p-1 text-slate-400 hover:text-white hover:bg-slate-800/60 transition"
+                  onClick={() => {
+                    setBaseUrlInput("http://localhost:8000");
+                    setTestAuthStatus("idle");
+                  }}
+                  className="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:text-cyan-300 transition"
                 >
-                  {copiedToken ? (
-                    <Check className="h-3.5 w-3.5 text-emerald-400" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
+                  Localhost:8000
                 </button>
               </div>
             </div>
+            <input
+              type="text"
+              value={baseUrlInput}
+              onChange={(e) => {
+                setBaseUrlInput(e.target.value);
+                setTestAuthStatus("idle");
+              }}
+              placeholder="https://nexus-ai-trader-r2ez.onrender.com"
+              className="w-full rounded border border-slate-800 bg-nexus-void px-3 py-2 text-xs text-white placeholder-slate-600 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400/50"
+            />
+          </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={handleSaveToken}
-                className="rounded border border-cyan-500/40 bg-cyan-500/20 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/30 transition"
-              >
-                Save Key
-              </button>
-              <button
-                type="button"
-                onClick={handleTestToken}
-                disabled={testAuthStatus === "testing"}
-                className="inline-flex items-center gap-1.5 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-50 transition"
-              >
-                <RefreshCw
-                  className={`h-3 w-3 ${testAuthStatus === "testing" ? "animate-spin text-cyan-400" : ""}`}
+          {/* API Security Token Setting */}
+          <div className="space-y-1.5 font-mono text-xs">
+            <span className="block text-[11px] font-semibold text-slate-300">
+              Administrative Authentication Token
+            </span>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type={showToken ? "text" : "password"}
+                  value={tokenInput}
+                  onChange={(e) => {
+                    setTokenInput(e.target.value);
+                    setTestAuthStatus("idle");
+                  }}
+                  placeholder="nexus_sec_admin_..."
+                  className="w-full rounded border border-slate-800 bg-nexus-void px-3 py-2 pr-20 text-xs text-white placeholder-slate-600 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400/50"
                 />
-                <span>{testAuthStatus === "testing" ? "Testing..." : "Test Connection"}</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleResetToken}
-                className="rounded border border-slate-800 bg-transparent px-2.5 py-2 text-xs text-slate-400 hover:text-slate-200 hover:border-slate-700 transition"
-              >
-                Reset Default
-              </button>
+                <div className="absolute inset-y-0 right-1 flex items-center gap-1 pr-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowToken(!showToken)}
+                    title={showToken ? "Hide Key" : "Reveal Key"}
+                    className="rounded p-1 text-slate-400 hover:text-white hover:bg-slate-800/60 transition"
+                  >
+                    {showToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyToken}
+                    title="Copy Key to Clipboard"
+                    className="rounded p-1 text-slate-400 hover:text-white hover:bg-slate-800/60 transition"
+                  >
+                    {copiedToken ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleSaveConnection}
+                  className="rounded border border-cyan-500/40 bg-cyan-500/20 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/30 transition"
+                >
+                  Save Configuration
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTestToken}
+                  disabled={testAuthStatus === "testing"}
+                  className="inline-flex items-center gap-1.5 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-50 transition"
+                >
+                  <RefreshCw
+                    className={`h-3 w-3 ${testAuthStatus === "testing" ? "animate-spin text-cyan-400" : ""}`}
+                  />
+                  <span>{testAuthStatus === "testing" ? "Testing..." : "Test Connection"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetConnection}
+                  className="rounded border border-slate-800 bg-transparent px-2.5 py-2 text-xs text-slate-400 hover:text-slate-200 hover:border-slate-700 transition"
+                >
+                  Reset Defaults
+                </button>
+              </div>
             </div>
           </div>
 
           {savedSuccess && (
             <p className="font-mono text-[11px] text-cyan-300">
-              ✓ Token saved to browser storage. Outgoing requests will use this credential.
+              ✓ Connection settings saved to browser storage. Outgoing requests will use these parameters.
             </p>
           )}
 
@@ -312,7 +369,7 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
 
           {testAuthStatus === "failed" && (
             <p className="font-mono text-[11px] text-rose-400">
-              ✗ Authentication failed: {testAuthDetail}
+              ✗ Connection test failed: {testAuthDetail}
             </p>
           )}
         </div>

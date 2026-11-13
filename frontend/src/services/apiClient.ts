@@ -31,7 +31,6 @@ async function requestJson<T>(
     ? {
         Authorization: `Bearer ${token}`,
         "X-Nexus-API-Key": token,
-        "X-API-Key": token,
       }
     : {};
   const response = await fetch(`${baseUrl}${path}`, {
