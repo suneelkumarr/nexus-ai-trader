@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Scale, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
 import { fetchPortfolioStatistics } from "../../services/apiClient";
 import type {
@@ -258,9 +259,19 @@ export function PortfolioOptimizerModal({
     setWeights((prev) => ({ ...prev, [symbol]: value }));
   };
 
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 backdrop-blur-md overflow-y-auto">
       <div className="nexus-panel max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-cyan-500/40 bg-[#040816] p-6 shadow-2xl space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-500/20 pb-4">
@@ -538,6 +549,7 @@ export function PortfolioOptimizerModal({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

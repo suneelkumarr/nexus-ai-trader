@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, Swords, RefreshCw } from "lucide-react";
 import { fetchCouncilDebate } from "../../services/apiClient";
 import type { CouncilDebateResult } from "../../types/system";
@@ -53,12 +54,17 @@ export function CouncilOfQuantsDebateModal({
   useEffect(() => {
     if (isOpen) {
       runDebate(symbol);
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
     }
   }, [isOpen, symbol, timeframe]);
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 backdrop-blur-md overflow-y-auto">
       <div className="nexus-panel max-h-[94vh] w-full max-w-5xl overflow-y-auto rounded-xl border border-cyan-500/40 bg-[#040816] p-6 shadow-2xl space-y-5">
         {/* Header */}
@@ -379,6 +385,7 @@ export function CouncilOfQuantsDebateModal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

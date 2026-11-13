@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, Printer } from "lucide-react";
 import type { TerminalSnapshotResponse, TradeLedgerEntry } from "../../types/system";
 import { formatInr, formatPct, formatUtcTime, toFiniteNumber } from "../../utils/format";
@@ -78,6 +80,16 @@ export function InstitutionalTearsheetModal({
   onClose,
   snapshot,
 }: InstitutionalTearsheetModalProps) {
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const initialCapital = toFiniteNumber(snapshot?.portfolio.initial_capital_inr || 0);
@@ -127,7 +139,7 @@ export function InstitutionalTearsheetModal({
     window.print();
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 backdrop-blur-md overflow-y-auto print:p-0 print:bg-white print:text-black">
       <div className="nexus-panel max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-xl border border-cyan-500/40 bg-[#040816] p-6 shadow-2xl space-y-5 print:max-h-none print:border-none print:bg-white print:p-4 print:text-black print:shadow-none">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-500/20 pb-4 print:border-black/20">
@@ -308,6 +320,7 @@ export function InstitutionalTearsheetModal({
           </span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

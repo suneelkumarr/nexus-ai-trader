@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Activity,
   AlertOctagon,
@@ -88,6 +89,16 @@ export function TopBar({
       setSwitchingMode(false);
     }
   }
+
+  useEffect(() => {
+    if (confirmOpen || modeConfirmOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [confirmOpen, modeConfirmOpen]);
 
   async function handleRefresh(): Promise<void> {
     setRefreshing(true);
@@ -342,80 +353,82 @@ export function TopBar({
       </div>
 
       {/* Emergency Stop Confirmation Modal */}
-      {confirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
-          <div className="w-full max-w-lg rounded-2xl border border-rose-500/40 bg-[#0b1329] p-6 shadow-2xl shadow-rose-950/50">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400">
-                  <AlertOctagon className="h-6 w-6" />
+      {confirmOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+            <div className="w-full max-w-lg rounded-2xl border border-rose-500/40 bg-[#0b1329] p-6 shadow-2xl shadow-rose-950/50">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400">
+                    <AlertOctagon className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-white">
+                      Emergency Circuit Breaker Trigger
+                    </h3>
+                    <p className="font-mono text-xs text-rose-300/80">
+                      Instantly halt all automated trading engines
+                    </p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setConfirmOpen(false)}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3 font-mono text-xs">
                 <div>
-                  <h3 className="font-display text-base font-bold text-white">
-                    Emergency Circuit Breaker Trigger
-                  </h3>
-                  <p className="font-mono text-xs text-rose-300/80">
-                    Instantly halt all automated trading engines
-                  </p>
+                  <label className="block text-slate-400 mb-1">Audit Log Reason:</label>
+                  <textarea
+                    value={stopReason}
+                    onChange={(e) => setStopReason(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900/90 p-3 text-white focus:border-rose-500 focus:outline-none"
+                    rows={2}
+                  />
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setConfirmOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
 
-            <div className="mt-4 space-y-3 font-mono text-xs">
-              <div>
-                <label className="block text-slate-400 mb-1">Audit Log Reason:</label>
-                <textarea
-                  value={stopReason}
-                  onChange={(e) => setStopReason(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900/90 p-3 text-white focus:border-rose-500 focus:outline-none"
-                  rows={2}
-                />
+                <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={flattenPositions}
+                    onChange={(e) => setFlattenPositions(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-rose-500"
+                  />
+                  <span>Flatten and liquidate all open paper positions immediately</span>
+                </label>
+
+                {stopError && (
+                  <div className="rounded-xl border border-rose-500/50 bg-rose-500/15 p-2.5 text-rose-300">
+                    {stopError}
+                  </div>
+                )}
               </div>
 
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={flattenPositions}
-                  onChange={(e) => setFlattenPositions(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-rose-500"
-                />
-                <span>Flatten and liquidate all open paper positions immediately</span>
-              </label>
-
-              {stopError && (
-                <div className="rounded-xl border border-rose-500/50 bg-rose-500/15 p-2.5 text-rose-300">
-                  {stopError}
-                </div>
-              )}
+              <div className="mt-5 flex justify-end gap-3 font-mono text-xs">
+                <button
+                  type="button"
+                  onClick={() => setConfirmOpen(false)}
+                  className="rounded-xl border border-slate-700 px-4 py-2 font-medium text-slate-300 hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmEmergencyStop()}
+                  disabled={emergencyPending}
+                  className="rounded-xl bg-rose-600 px-4 py-2 font-bold text-white shadow-lg shadow-rose-600/30 hover:bg-rose-500 disabled:opacity-50"
+                >
+                  {emergencyPending ? "Triggering..." : "CONFIRM EMERGENCY STOP"}
+                </button>
+              </div>
             </div>
-
-            <div className="mt-5 flex justify-end gap-3 font-mono text-xs">
-              <button
-                type="button"
-                onClick={() => setConfirmOpen(false)}
-                className="rounded-xl border border-slate-700 px-4 py-2 font-medium text-slate-300 hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleConfirmEmergencyStop()}
-                disabled={emergencyPending}
-                className="rounded-xl bg-rose-600 px-4 py-2 font-bold text-white shadow-lg shadow-rose-600/30 hover:bg-rose-500 disabled:opacity-50"
-              >
-                {emergencyPending ? "Triggering..." : "CONFIRM EMERGENCY STOP"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
       {/* Institutional Tearsheet Modal */}
       <InstitutionalTearsheetModal
@@ -438,123 +451,125 @@ export function TopBar({
       />
 
       {/* Execution Mode Atomic Switcher Modal */}
-      {modeConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
-          <div className="w-full max-w-lg rounded-2xl border border-white/15 bg-[#0b1329] p-6 shadow-2xl">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`flex h-11 w-11 items-center justify-center rounded-xl border ${
+      {modeConfirmOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
+            <div className="w-full max-w-lg rounded-2xl border border-white/15 bg-[#0b1329] p-6 shadow-2xl">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`flex h-11 w-11 items-center justify-center rounded-xl border ${
+                      pendingTargetMode === "live_binance"
+                        ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-300"
+                        : "border-amber-500/40 bg-amber-500/20 text-amber-300"
+                    }`}
+                  >
+                    {pendingTargetMode === "live_binance" ? (
+                      <Zap className="h-6 w-6 text-emerald-400" />
+                    ) : (
+                      <ShieldAlert className="h-6 w-6 text-amber-400" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-white">
+                      {pendingTargetMode === "live_binance"
+                        ? "Activate LIVE Real Money Trading"
+                        : "Switch to Virtual Paper Simulation"}
+                    </h3>
+                    <p className="font-mono text-xs text-slate-400">
+                      {pendingTargetMode === "live_binance"
+                        ? "Binance USDⓈ-M Futures Production Mainnet"
+                        : "Risk-Free Virtual INR 10,000 Sandbox"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setModeConfirmOpen(false)}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3 font-mono text-xs">
+                {pendingTargetMode === "live_binance" ? (
+                  <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 text-slate-200">
+                    <div className="flex items-center gap-2 text-emerald-300 font-bold">
+                      <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                      <span>Real-Money Invariant Safety Check</span>
+                    </div>
+                    <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
+                      <li>
+                        <strong>Automatic Paper Trading Paused:</strong> Virtual simulation order generation will stop immediately.
+                      </li>
+                      <li>
+                        <strong>Exchange Gateway:</strong> Real orders will be routed directly to Binance USDⓈ-M Futures.
+                      </li>
+                      <li>
+                        <strong>Verified Balance:</strong> $2.9409 USDT available margin (Production).
+                      </li>
+                      <li>
+                        <strong>Non-Custodial Lock:</strong> API key has NO withdrawal permission. Your capital cannot leave Binance.
+                      </li>
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 text-slate-200">
+                    <div className="flex items-center gap-2 text-amber-300 font-bold">
+                      <ShieldAlert className="h-4 w-4 text-amber-400" />
+                      <span>Return to Virtual Paper Sandbox</span>
+                    </div>
+                    <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
+                      <li>
+                        <strong>Live Exchange Execution Halted:</strong> Zero real-money orders will be placed on Binance.
+                      </li>
+                      <li>
+                        <strong>Paper Simulation Resumed:</strong> Strategy V1 & Arbitrage paper trades will resume in PostgreSQL ledger.
+                      </li>
+                      <li>
+                        <strong>Risk Level:</strong> 0.00% financial exposure.
+                      </li>
+                    </ul>
+                  </div>
+                )}
+
+                {modeError && (
+                  <div className="rounded-xl border border-rose-500/50 bg-rose-500/15 p-2.5 text-rose-300">
+                    {modeError}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 flex justify-end gap-3 font-mono text-xs">
+                <button
+                  type="button"
+                  onClick={() => setModeConfirmOpen(false)}
+                  className="rounded-xl border border-slate-700 px-4 py-2 font-medium text-slate-300 hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={switchingMode}
+                  onClick={() => void handleConfirmModeSwitch()}
+                  className={`rounded-xl px-4 py-2 font-bold text-white shadow-lg disabled:opacity-50 ${
                     pendingTargetMode === "live_binance"
-                      ? "border-emerald-500/40 bg-emerald-500/20 text-emerald-300"
-                      : "border-amber-500/40 bg-amber-500/20 text-amber-300"
+                      ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30"
+                      : "bg-amber-600 hover:bg-amber-500 shadow-amber-600/30"
                   }`}
                 >
-                  {pendingTargetMode === "live_binance" ? (
-                    <Zap className="h-6 w-6 text-emerald-400" />
-                  ) : (
-                    <ShieldAlert className="h-6 w-6 text-amber-400" />
-                  )}
-                </div>
-                <div>
-                  <h3 className="font-display text-base font-bold text-white">
-                    {pendingTargetMode === "live_binance"
-                      ? "Activate LIVE Real Money Trading"
-                      : "Switch to Virtual Paper Simulation"}
-                  </h3>
-                  <p className="font-mono text-xs text-slate-400">
-                    {pendingTargetMode === "live_binance"
-                      ? "Binance USDⓈ-M Futures Production Mainnet"
-                      : "Risk-Free Virtual INR 10,000 Sandbox"}
-                  </p>
-                </div>
+                  {switchingMode
+                    ? "Switching Mode..."
+                    : pendingTargetMode === "live_binance"
+                      ? "ACTIVATE LIVE REAL TRADING"
+                      : "SWITCH TO PAPER TRADING"}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setModeConfirmOpen(false)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
             </div>
-
-            <div className="mt-4 space-y-3 font-mono text-xs">
-              {pendingTargetMode === "live_binance" ? (
-                <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 text-slate-200">
-                  <div className="flex items-center gap-2 text-emerald-300 font-bold">
-                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                    <span>Real-Money Invariant Safety Check</span>
-                  </div>
-                  <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
-                    <li>
-                      <strong>Automatic Paper Trading Paused:</strong> Virtual simulation order generation will stop immediately.
-                    </li>
-                    <li>
-                      <strong>Exchange Gateway:</strong> Real orders will be routed directly to Binance USDⓈ-M Futures.
-                    </li>
-                    <li>
-                      <strong>Verified Balance:</strong> $2.9409 USDT available margin (Production).
-                    </li>
-                    <li>
-                      <strong>Non-Custodial Lock:</strong> API key has NO withdrawal permission. Your capital cannot leave Binance.
-                    </li>
-                  </ul>
-                </div>
-              ) : (
-                <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-950/20 p-4 text-slate-200">
-                  <div className="flex items-center gap-2 text-amber-300 font-bold">
-                    <ShieldAlert className="h-4 w-4 text-amber-400" />
-                    <span>Return to Virtual Paper Sandbox</span>
-                  </div>
-                  <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
-                    <li>
-                      <strong>Live Exchange Execution Halted:</strong> Zero real-money orders will be placed on Binance.
-                    </li>
-                    <li>
-                      <strong>Paper Simulation Resumed:</strong> Strategy V1 & Arbitrage paper trades will resume in PostgreSQL ledger.
-                    </li>
-                    <li>
-                      <strong>Risk Level:</strong> 0.00% financial exposure.
-                    </li>
-                  </ul>
-                </div>
-              )}
-
-              {modeError && (
-                <div className="rounded-xl border border-rose-500/50 bg-rose-500/15 p-2.5 text-rose-300">
-                  {modeError}
-                </div>
-              )}
-            </div>
-
-            <div className="mt-5 flex justify-end gap-3 font-mono text-xs">
-              <button
-                type="button"
-                onClick={() => setModeConfirmOpen(false)}
-                className="rounded-xl border border-slate-700 px-4 py-2 font-medium text-slate-300 hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={switchingMode}
-                onClick={() => void handleConfirmModeSwitch()}
-                className={`rounded-xl px-4 py-2 font-bold text-white shadow-lg disabled:opacity-50 ${
-                  pendingTargetMode === "live_binance"
-                    ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30"
-                    : "bg-amber-600 hover:bg-amber-500 shadow-amber-600/30"
-                }`}
-              >
-                {switchingMode
-                  ? "Switching Mode..."
-                  : pendingTargetMode === "live_binance"
-                    ? "ACTIVATE LIVE REAL TRADING"
-                    : "SWITCH TO PAPER TRADING"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </header>
   );
 }
