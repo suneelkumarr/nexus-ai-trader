@@ -145,3 +145,4 @@ class FuturesAccountSummary(BaseModel):
     total_trades_count: int
     win_rate_pct: Decimal
     auto_trade_enabled: bool = False
+

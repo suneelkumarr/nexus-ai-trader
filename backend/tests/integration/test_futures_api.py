@@ -149,3 +149,4 @@ async def test_futures_api_full_flow(tmp_path: Path) -> None:
 
     await funding.close()
     await db_manager.dispose()
+

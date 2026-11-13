@@ -82,3 +82,4 @@ export interface FuturesAccountSummary {
   win_rate_pct: number;
   auto_trade_enabled: boolean;
 }
+

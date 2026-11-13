@@ -117,6 +117,21 @@ export function FuturesTradingView({ snapshot }: FuturesTradingViewProps) {
       ? markPrice * (1 - 1 / leverage + mmr)
       : markPrice * (1 + 1 / leverage - mmr);
 
+  const liqDistancePct =
+    markPrice > 0 ? (Math.abs(markPrice - estLiqPrice) / markPrice) * 100 : 0;
+
+  const setPercentageSize = (pct: number) => {
+    const availableCash = summary?.available_cash_inr ?? 10000;
+    const targetMarginInr = (availableCash * pct) / 100;
+    const targetMarginUsd = targetMarginInr / inrRate;
+    const targetNotionalUsd = targetMarginUsd * leverage;
+    if (markPrice > 0) {
+      const calculatedQty = targetNotionalUsd / markPrice;
+      const rounded = calculatedQty < 1 ? calculatedQty.toFixed(4) : calculatedQty.toFixed(2);
+      setQuantity(rounded);
+    }
+  };
+
   const handleOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setOrderError(null);
@@ -393,10 +408,10 @@ export function FuturesTradingView({ snapshot }: FuturesTradingViewProps) {
                 <button
                   type="button"
                   onClick={() => setOrderSide("LONG")}
-                  className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all ${
+                  className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all shadow-lg ${
                     orderSide === "LONG"
-                      ? "border border-emerald-500 bg-emerald-500/20 text-emerald-300 shadow-lg shadow-emerald-500/10"
-                      : "border border-slate-800 bg-slate-950/40 text-slate-400 hover:bg-slate-800/60"
+                      ? "border border-emerald-500 bg-emerald-500/25 text-emerald-300 shadow-emerald-500/20"
+                      : "border border-white/5 bg-slate-950/40 text-slate-400 hover:bg-slate-800/60 hover:text-white"
                   }`}
                 >
                   <ArrowUpRight className="h-4 w-4" />
@@ -405,10 +420,10 @@ export function FuturesTradingView({ snapshot }: FuturesTradingViewProps) {
                 <button
                   type="button"
                   onClick={() => setOrderSide("SHORT")}
-                  className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all ${
+                  className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all shadow-lg ${
                     orderSide === "SHORT"
-                      ? "border border-rose-500 bg-rose-500/20 text-rose-300 shadow-lg shadow-rose-500/10"
-                      : "border border-slate-800 bg-slate-950/40 text-slate-400 hover:bg-slate-800/60"
+                      ? "border border-rose-500 bg-rose-500/25 text-rose-300 shadow-rose-500/20"
+                      : "border border-white/5 bg-slate-950/40 text-slate-400 hover:bg-slate-800/60 hover:text-white"
                   }`}
                 >
                   <ArrowDownRight className="h-4 w-4" />
@@ -417,11 +432,11 @@ export function FuturesTradingView({ snapshot }: FuturesTradingViewProps) {
               </div>
             </div>
 
-            {/* Quantity Input */}
+            {/* Quantity Input + Quick Percentage Buttons */}
             <div>
               <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
                 <span>Contract Quantity ({selectedSymbol.split("/")[0]})</span>
-                <span>Notional: {formatUsdt(notionalUsd)}</span>
+                <span className="font-mono text-cyan-300 font-semibold">Notional: {formatUsdt(notionalUsd)}</span>
               </div>
               <input
                 type="number"
@@ -430,8 +445,20 @@ export function FuturesTradingView({ snapshot }: FuturesTradingViewProps) {
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
                 placeholder="e.g. 0.002"
-                className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-4 py-2.5 text-sm font-mono text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-4 py-2.5 text-sm font-mono text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 shadow-inner"
               />
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                {[25, 50, 75, 100].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => setPercentageSize(pct)}
+                    className="rounded-lg border border-white/5 bg-slate-800/40 py-1 font-mono text-[11px] font-semibold text-slate-400 hover:border-cyan-500/30 hover:bg-cyan-500/15 hover:text-cyan-300 transition-all"
+                  >
+                    {pct === 100 ? "MAX" : `${pct}%`}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Stop-Loss & Take-Profit (Optional) */}
@@ -445,8 +472,8 @@ export function FuturesTradingView({ snapshot }: FuturesTradingViewProps) {
                   step="any"
                   value={stopLoss}
                   onChange={(e) => setStopLoss(e.target.value)}
-                  placeholder={`Optional SL`}
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none"
+                  placeholder="Optional SL"
+                  className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none"
                 />
               </div>
               <div>
@@ -458,25 +485,27 @@ export function FuturesTradingView({ snapshot }: FuturesTradingViewProps) {
                   step="any"
                   value={takeProfit}
                   onChange={(e) => setTakeProfit(e.target.value)}
-                  placeholder={`Optional TP`}
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none"
+                  placeholder="Optional TP"
+                  className="w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 py-2 text-xs font-mono text-white placeholder-slate-600 focus:border-cyan-500 focus:outline-none"
                 />
               </div>
             </div>
 
             {/* Dynamic Risk & Calculation Box */}
-            <div className="rounded-xl border border-slate-800/90 bg-slate-950/70 p-4 space-y-2 text-xs font-mono">
+            <div className="rounded-xl border border-white/[0.08] bg-slate-950/70 p-4 space-y-2.5 text-xs font-mono shadow-inner">
               <div className="flex justify-between text-slate-400">
-                <span>Required Margin (INR):</span>
-                <span className="font-bold text-white">{formatInr(requiredMarginInr)}</span>
+                <span>Required Isolated Margin:</span>
+                <span className="font-bold text-white tabular-nums">{formatInr(requiredMarginInr)}</span>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Est. Liquidation Price:</span>
-                <span className="font-bold text-amber-300">{formatUsdt(estLiqPrice)}</span>
+                <span className="font-bold text-amber-300 tabular-nums">
+                  {formatUsdt(estLiqPrice)} ({liqDistancePct.toFixed(1)}% buffer)
+                </span>
               </div>
               <div className="flex justify-between text-slate-400">
                 <span>Est. Taker Fee (0.04%):</span>
-                <span className="text-slate-300">{formatInr(estFeeInr)}</span>
+                <span className="text-slate-300 tabular-nums">{formatInr(estFeeInr)}</span>
               </div>
             </div>
 

@@ -204,14 +204,21 @@ export function App() {
         </main>
       </div>
 
-      <footer className="border-t border-cyan-500/15 bg-nexus-navy/90 px-4 py-2 font-mono text-[11px] text-slate-400">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span>
-            NEXUS AI TRADER · {snapshot?.paper_trading_banner ?? "PAPER TRADING ONLY — NO REAL-MONEY EXECUTION"}
-          </span>
-          <span className="text-slate-500">
-            Autonomous Multi-Agent System · Real Binance Spot Data · CrowLLM Market Intelligence
-          </span>
+      <footer className="border-t border-white/[0.08] bg-[#050a17]/95 px-6 py-2.5 font-mono text-xs text-slate-400 backdrop-blur-2xl">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(0,229,255,0.8)]" />
+            <span className="font-semibold text-slate-300">
+              NEXUS QUANTUM // {snapshot?.paper_trading_banner ?? "PAPER TRADING ONLY — NO REAL-MONEY RISK"}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-slate-500">
+            <span>Binance Market Telemetry</span>
+            <span>•</span>
+            <span>CrowLLM Quantitative AI</span>
+            <span>•</span>
+            <span>Isolated Risk Invariant Core</span>
+          </div>
         </div>
       </footer>
     </div>
