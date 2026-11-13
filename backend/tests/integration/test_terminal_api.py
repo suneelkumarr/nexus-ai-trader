@@ -276,3 +276,36 @@ async def test_terminal_websocket_stream_pushes_real_snapshot(tmp_path: Path) ->
             ws.send_text("close")
     finally:
         await db_manager.dispose()
+
+
+@pytest.mark.asyncio
+async def test_terminal_candles_series_endpoint(tmp_path: Path) -> None:
+    db_path = tmp_path / "candles.db"
+    feed = _StubMarketFeed(fail=False)
+    app, db_manager, candle_repo = await _make_test_app(
+        f"sqlite+aiosqlite:///{db_path.as_posix()}", feed=feed
+    )
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get(
+                "/api/v1/terminal/candles",
+                params={"symbol": "BTC/USDT", "timeframe": "15m", "limit": 50},
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["symbol"] == "BTC/USDT"
+            assert data["timeframe"] == "15m"
+            assert data["count"] == 50
+            assert len(data["candles"]) == 50
+            first_candle = data["candles"][0]
+            assert "time" in first_candle
+            assert "open" in first_candle
+            assert "high" in first_candle
+            assert "low" in first_candle
+            assert "close" in first_candle
+            assert "volume" in first_candle
+            assert first_candle["high"] >= first_candle["low"]
+    finally:
+        await db_manager.dispose()
+

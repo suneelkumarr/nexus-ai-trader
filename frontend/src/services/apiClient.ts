@@ -122,6 +122,26 @@ export async function runOosBacktest(params: {
   });
 }
 
+export async function fetchCandleSeries(params: {
+  symbol: string;
+  timeframe: string;
+  limit?: number;
+  signal?: AbortSignal;
+}): Promise<import("../types/system").CandleSeriesResponse> {
+  const q = new URLSearchParams({
+    symbol: params.symbol,
+    timeframe: params.timeframe,
+    limit: String(params.limit ?? 250),
+  }).toString();
+  return requestJson<import("../types/system").CandleSeriesResponse>(
+    `/api/v1/terminal/candles?${q}`,
+    {
+      method: "GET",
+      signal: params.signal,
+    },
+  );
+}
+
 export async function fetchCandlesStatus(params: {
   symbol: string;
   timeframe: string;

@@ -318,3 +318,20 @@ export interface AutonomousEngineStatus {
   last_error: string | null;
   latest_ai_research: AIResearchBriefing;
 }
+
+export interface CandleBarDto {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface CandleSeriesResponse {
+  symbol: string;
+  timeframe: string;
+  count: number;
+  candles: CandleBarDto[];
+}
+

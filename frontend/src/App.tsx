@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CandlestickChart, Orbit } from "lucide-react";
 import { AnalyticsSignalsPanel } from "./components/AnalyticsSignalsPanel";
 import { AutonomousAIResearchDeck } from "./components/AutonomousAIResearchDeck";
 import { AutonomousMissionControlBar } from "./components/AutonomousMissionControlBar";
@@ -6,6 +7,7 @@ import { NavSidebar } from "./components/NavSidebar";
 import { NexusScene } from "./components/NexusScene";
 import { PortfolioBottomDeck } from "./components/PortfolioBottomDeck";
 import { TopBar } from "./components/TopBar";
+import { TradingViewChart } from "./components/trading/TradingViewChart";
 import { BacktestingView } from "./components/views/BacktestingView";
 import { FuturesTradingView } from "./components/views/FuturesTradingView";
 import { MultiMarketRadarView } from "./components/views/MultiMarketRadarView";
@@ -31,6 +33,7 @@ import type {
 
 export function App() {
   const [activeTab, setActiveTab] = useState<NavTab>("Overview");
+  const [centerView, setCenterView] = useState<"chart" | "3d">("chart");
   const [settings, setSettings] = useState<SanitizedSettingsResponse | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [engineStatus, setEngineStatus] = useState<AutonomousEngineStatus | null>(null);
@@ -159,11 +162,58 @@ export function App() {
                     onRefresh={handleRefreshAIResearch}
                   />
 
-                  {/* 3D Scene + Real-time Indicators & Signals Panel */}
+                  {/* Center Stage: View Switcher Header + (TradingView Chart | 3D Matrix) + Analytics Panel */}
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-                    <div className="xl:col-span-8">
-                      <NexusScene snapshot={snapshot} />
+                    <div className="flex flex-col gap-3 xl:col-span-8">
+                      {/* View Switcher Header Bar */}
+                      <div className="flex items-center justify-between rounded-xl border border-white/[0.08] bg-[#070b19]/80 px-4 py-2 backdrop-blur-xl">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(0,229,255,0.8)]" />
+                          <span className="font-display text-xs font-semibold uppercase tracking-wider text-white">
+                            Executive Trading Desk
+                          </span>
+                          <span className="hidden sm:inline-block rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-[10px] text-cyan-300">
+                            LIVE TELEMETRY
+                          </span>
+                        </div>
+
+                        {/* View Mode Toggle */}
+                        <div className="flex items-center rounded-lg border border-white/[0.08] bg-black/40 p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setCenterView("chart")}
+                            className={`flex items-center gap-1.5 rounded-md px-3 py-1 font-mono text-xs font-medium transition ${
+                              centerView === "chart"
+                                ? "bg-cyan-500/20 text-cyan-300 shadow-[0_0_12px_rgba(0,229,255,0.4)]"
+                                : "text-slate-400 hover:text-slate-200"
+                            }`}
+                          >
+                            <CandlestickChart className="h-3.5 w-3.5" />
+                            Pro Candlestick Chart
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCenterView("3d")}
+                            className={`flex items-center gap-1.5 rounded-md px-3 py-1 font-mono text-xs font-medium transition ${
+                              centerView === "3d"
+                                ? "bg-cyan-500/20 text-cyan-300 shadow-[0_0_12px_rgba(0,229,255,0.4)]"
+                                : "text-slate-400 hover:text-slate-200"
+                            }`}
+                          >
+                            <Orbit className="h-3.5 w-3.5" />
+                            3D Connectome Matrix
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Active Visual Component */}
+                      {centerView === "chart" ? (
+                        <TradingViewChart snapshot={snapshot} />
+                      ) : (
+                        <NexusScene snapshot={snapshot} />
+                      )}
                     </div>
+
                     <div className="xl:col-span-4">
                       <AnalyticsSignalsPanel snapshot={snapshot} />
                     </div>
