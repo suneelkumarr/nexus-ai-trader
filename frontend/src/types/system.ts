@@ -271,6 +271,59 @@ export interface SanitizedSettingsResponse {
   ai_provider: string;
   ai_model: string;
   ai_enabled: boolean;
+  binance_use_testnet: boolean;
+  binance_configured: boolean;
+}
+
+export interface BinanceGatewayStatusResponse {
+  is_configured: boolean;
+  is_testnet: boolean;
+  ws_endpoint: string;
+  ws_latency_ms: number | null;
+  ws_status: string;
+  rest_endpoint: string;
+  can_trade: boolean;
+  can_withdraw: boolean;
+  safety_lock_passed: boolean;
+  wallet_balance_usdt: number;
+  available_balance_usdt: number;
+  open_positions_count: number;
+  message: string;
+}
+
+export interface BinanceTestConnectionRequest {
+  api_key: string;
+  api_secret: string;
+  use_testnet: boolean;
+}
+
+export interface BinanceTestConnectionResponse {
+  success: boolean;
+  environment: string;
+  latency_ms: number;
+  can_trade: boolean;
+  can_deposit: boolean;
+  can_withdraw: boolean;
+  safety_lock_passed: boolean;
+  clock_drift_ms: number;
+  wallet_balance_usdt: number;
+  available_balance_usdt: number;
+  open_positions_count: number;
+  permissions_summary: string;
+  error?: string | null;
+}
+
+export interface BinanceSaveCredentialsRequest {
+  api_key: string;
+  api_secret: string;
+  use_testnet: boolean;
+}
+
+export interface BinanceSaveCredentialsResponse {
+  success: boolean;
+  message: string;
+  is_configured: boolean;
+  is_testnet: boolean;
 }
 
 export interface CandlesStatusResponse {

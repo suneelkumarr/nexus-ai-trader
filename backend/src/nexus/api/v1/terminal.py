@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from nexus.api.dependencies import (
     get_app_settings,
+    get_binance_gateway,
     get_candle_repository,
     get_database_manager,
     get_independent_risk_manager,
@@ -280,6 +281,69 @@ class SanitizedSettingsResponse(BaseModel):
     ai_provider: str
     ai_model: str
     ai_enabled: bool
+    binance_use_testnet: bool = True
+    binance_configured: bool = False
+
+
+class BinanceGatewayStatusResponse(BaseModel):
+    """Binance USD(S)-M Futures Gateway and WebSocket health status."""
+
+    is_configured: bool
+    is_testnet: bool
+    ws_endpoint: str
+    ws_latency_ms: float | None = None
+    ws_status: str
+    rest_endpoint: str
+    can_trade: bool
+    can_withdraw: bool
+    safety_lock_passed: bool
+    wallet_balance_usdt: float = 0.0
+    available_balance_usdt: float = 0.0
+    open_positions_count: int = 0
+    message: str
+
+
+class BinanceTestConnectionRequest(BaseModel):
+    """Parameters to test a Binance API Key and Secret."""
+
+    api_key: str
+    api_secret: str
+    use_testnet: bool = True
+
+
+class BinanceTestConnectionResponse(BaseModel):
+    """Outcome of testing Binance credentials with non-custodial safety validation."""
+
+    success: bool
+    environment: str
+    latency_ms: float
+    can_trade: bool = False
+    can_deposit: bool = False
+    can_withdraw: bool = False
+    safety_lock_passed: bool = True
+    clock_drift_ms: int = 0
+    wallet_balance_usdt: float = 0.0
+    available_balance_usdt: float = 0.0
+    open_positions_count: int = 0
+    permissions_summary: str = ""
+    error: str | None = None
+
+
+class BinanceSaveCredentialsRequest(BaseModel):
+    """Payload to dynamically register Binance API credentials."""
+
+    api_key: str
+    api_secret: str
+    use_testnet: bool = True
+
+
+class BinanceSaveCredentialsResponse(BaseModel):
+    """Confirmation of updated Binance credentials."""
+
+    success: bool
+    message: str
+    is_configured: bool
+    is_testnet: bool
 
 
 async def _collect_terminal_snapshot(
@@ -1053,6 +1117,134 @@ async def get_terminal_settings(
         ai_provider=settings.ai.provider,
         ai_model=settings.ai.model,
         ai_enabled=settings.ai.enabled,
+        binance_use_testnet=settings.binance_use_testnet,
+        binance_configured=bool(
+            settings.binance_api_key.get_secret_value()
+            and settings.binance_api_secret.get_secret_value()
+        ),
+    )
+
+
+@router.get(
+    "/terminal/binance-gateway/status",
+    response_model=BinanceGatewayStatusResponse,
+    summary="Get Binance USD(S)-M Futures Gateway and WebSocket health status",
+)
+async def get_binance_gateway_status(
+    gateway: Annotated[Any, Depends(get_binance_gateway)],
+    _auth: Annotated[str, Depends(require_admin_auth)] = "ok",
+) -> BinanceGatewayStatusResponse:
+    if gateway is None:
+        return BinanceGatewayStatusResponse(
+            is_configured=False,
+            is_testnet=True,
+            ws_endpoint="wss://testnet.binancefuture.com/ws-fapi/v1",
+            ws_latency_ms=None,
+            ws_status="offline",
+            rest_endpoint="https://testnet.binancefuture.com",
+            can_trade=False,
+            can_withdraw=False,
+            safety_lock_passed=True,
+            message="Binance Gateway not initialized",
+        )
+
+    # Ping real-time WebSocket API
+    ping_res = await gateway.ping_ws()
+    ws_status = ping_res.get("status", "failed")
+    ws_latency = ping_res.get("latency_ms")
+
+    can_trade = False
+    can_withdraw = False
+    safety_lock = True
+    wallet_bal = 0.0
+    avail_bal = 0.0
+    open_pos_count = 0
+    msg = "WebSocket API active. Ready for low-latency streaming."
+
+    if gateway.is_configured:
+        acc_res = await gateway.get_account_summary()
+        if "error" not in acc_res:
+            can_trade = acc_res.get("canTrade", False)
+            can_withdraw = acc_res.get("canWithdraw", False)
+            safety_lock = not can_withdraw
+            assets = acc_res.get("assets", [])
+            usdt = next((a for a in assets if a.get("asset") == "USDT"), None)
+            if usdt:
+                wallet_bal = float(usdt.get("walletBalance", 0))
+                avail_bal = float(usdt.get("availableBalance", 0))
+            positions = acc_res.get("positions", [])
+            open_pos_count = len(
+                [p for p in positions if float(p.get("positionAmt", 0)) != 0.0]
+            )
+            msg = f"Credentials verified · Margin: ${avail_bal:.2f} USDT"
+        else:
+            msg = f"Account sync error: {acc_res.get('error')}"
+
+    return BinanceGatewayStatusResponse(
+        is_configured=gateway.is_configured,
+        is_testnet=gateway.is_testnet,
+        ws_endpoint=gateway._ws_url,
+        ws_latency_ms=ws_latency,
+        ws_status=ws_status,
+        rest_endpoint=gateway._rest_url,
+        can_trade=can_trade,
+        can_withdraw=can_withdraw,
+        safety_lock_passed=safety_lock,
+        wallet_balance_usdt=wallet_bal,
+        available_balance_usdt=avail_bal,
+        open_positions_count=open_pos_count,
+        message=msg,
+    )
+
+
+@router.post(
+    "/terminal/binance-gateway/test-connection",
+    response_model=BinanceTestConnectionResponse,
+    summary="Test Binance API Key & Secret with strict non-custodial safety check",
+)
+async def test_binance_gateway_connection(
+    body: BinanceTestConnectionRequest,
+    gateway: Annotated[Any, Depends(get_binance_gateway)],
+    _auth: Annotated[str, Depends(require_admin_auth)] = "ok",
+) -> BinanceTestConnectionResponse:
+    if gateway is None:
+        from nexus.infrastructure.exchange.binance_gateway import BinanceFuturesGateway
+
+        gateway = BinanceFuturesGateway(
+            api_key=body.api_key,
+            api_secret=body.api_secret,
+            use_testnet=body.use_testnet,
+        )
+
+    res = await gateway.test_credentials(
+        api_key=body.api_key,
+        api_secret=body.api_secret,
+        use_testnet=body.use_testnet,
+    )
+    return BinanceTestConnectionResponse(**res)
+
+
+@router.post(
+    "/terminal/binance-gateway/credentials",
+    response_model=BinanceSaveCredentialsResponse,
+    summary="Save and dynamically apply Binance API credentials",
+)
+async def save_binance_credentials(
+    body: BinanceSaveCredentialsRequest,
+    gateway: Annotated[Any, Depends(get_binance_gateway)],
+    _auth: Annotated[str, Depends(require_admin_auth)] = "ok",
+) -> BinanceSaveCredentialsResponse:
+    if gateway is not None:
+        gateway.update_credentials(
+            api_key=body.api_key,
+            api_secret=body.api_secret,
+            use_testnet=body.use_testnet,
+        )
+    return BinanceSaveCredentialsResponse(
+        success=True,
+        message="Binance credentials and target environment successfully updated.",
+        is_configured=bool(body.api_key and body.api_secret),
+        is_testnet=body.use_testnet,
     )
 
 

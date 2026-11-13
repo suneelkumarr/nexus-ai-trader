@@ -38,6 +38,16 @@ _scanner = MultiMarketScanner()
 _detector = ArbitrageDetector()
 
 
+def get_arbitrage_scanner() -> MultiMarketScanner:
+    return _scanner
+
+
+def set_arbitrage_gateway(gateway: Any | None) -> None:
+    """Inject active Binance Futures WebSocket gateway into module scanner."""
+    _scanner.set_binance_gateway(gateway)
+
+
+
 class MarketTickerSchema(BaseModel):
     symbol: str
     bid: float

@@ -126,6 +126,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             slippage_bps=active_settings.paper_slippage_bps,
             trailing_atr_multiplier=active_settings.strategy_v1.trailing_atr_multiplier,
         )
+        from nexus.api.v1.arbitrage import set_arbitrage_gateway
+        from nexus.infrastructure.exchange.binance_gateway import BinanceFuturesGateway
+
+        binance_gateway = BinanceFuturesGateway(
+            api_key=active_settings.binance_api_key.get_secret_value(),
+            api_secret=active_settings.binance_api_secret.get_secret_value(),
+            use_testnet=active_settings.binance_use_testnet,
+        )
+        set_arbitrage_gateway(binance_gateway)
+
         autonomous_engine = AutonomousEngineService(
             settings=active_settings,
             market_data=market_data_service,
@@ -136,6 +146,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             broker=broker,
             ai_client=ai_client,
             futures_broker=futures_broker,
+            binance_gateway=binance_gateway,
         )
 
         app.state.settings = active_settings
@@ -150,6 +161,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.autonomous_engine = autonomous_engine
         app.state.futures_broker = futures_broker
         app.state.funding_service = funding_service
+        app.state.binance_gateway = binance_gateway
 
         # Start autonomous multi-agent background trading and intelligence loops
         await autonomous_engine.start()

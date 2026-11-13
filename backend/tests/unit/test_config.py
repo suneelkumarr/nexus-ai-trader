@@ -53,16 +53,16 @@ def test_database_url_uses_secret_str() -> None:
 
 
 def test_database_url_override_normalizes_postgres_scheme_and_sslmode() -> None:
-    raw_url = "postgres://avnadmin:secret@db.example.com:19311/defaultdb?sslmode=require"
+    raw_url = "postgres://avnadmin:db_secret_pass@db.example.com:19311/defaultdb?sslmode=require"
     settings = Settings(_env_file=None, database_url_override=raw_url)
-    assert "secret" not in repr(settings)
+    assert "db_secret_pass" not in repr(settings)
     assert (
         settings.async_database_url
-        == "postgresql+asyncpg://avnadmin:secret@db.example.com:19311/defaultdb?ssl=require"
+        == "postgresql+asyncpg://avnadmin:db_secret_pass@db.example.com:19311/defaultdb?ssl=require"
     )
     assert (
         settings.sync_database_url
-        == "postgresql+psycopg://avnadmin:secret@db.example.com:19311/defaultdb?sslmode=require"
+        == "postgresql+psycopg://avnadmin:db_secret_pass@db.example.com:19311/defaultdb?sslmode=require"
     )
 
     sqlite_settings = Settings(

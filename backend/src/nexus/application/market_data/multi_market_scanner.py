@@ -148,6 +148,7 @@ class MultiMarketScanner:
         self,
         symbols: list[str] | None = None,
         cache_ttl_seconds: float = 10.0,
+        binance_gateway: Any | None = None,
     ) -> None:
         self._symbols = symbols or list(DEFAULT_SCAN_UNIVERSE)
         self._cache_ttl_s = cache_ttl_seconds
@@ -157,6 +158,11 @@ class MultiMarketScanner:
         self._lock = asyncio.Lock()
         self._total_ticks_processed: int = 0
         self._exchange_client: Any | None = None
+        self._binance_gateway = binance_gateway
+
+    def set_binance_gateway(self, gateway: Any | None) -> None:
+        """Inject or dynamically reconfigure BinanceFuturesGateway."""
+        self._binance_gateway = gateway
 
     def _get_exchange(self) -> Any:
         if self._exchange_client is None:
@@ -218,7 +224,7 @@ class MultiMarketScanner:
         return dict(res)
 
     async def scan_markets(self, force_refresh: bool = False) -> dict[str, MarketTickerItem]:
-        """Fetch quotes for all 54 symbols using batch CCXT query."""
+        """Fetch quotes for all symbols using real-time WebSocket API with fallback to CCXT."""
         now = time.monotonic()
         if now < self._banned_until_monotonic:
             if self._cached_tickers:
@@ -231,6 +237,21 @@ class MultiMarketScanner:
         is_fresh = (now - self._last_fetch_ts) < self._cache_ttl_s
         if not force_refresh and self._cached_tickers and is_fresh:
             return dict(self._cached_tickers)
+
+        # 1. Primary path: Official Binance Futures WebSocket API (< 150ms universe quotes)
+        if self._binance_gateway is not None:
+            try:
+                ws_quotes = await self._binance_gateway.fetch_universe_quotes_ws()
+                if ws_quotes and len(ws_quotes) >= 10:
+                    async with self._lock:
+                        for sym in self._symbols:
+                            if sym in ws_quotes:
+                                self._cached_tickers[sym] = ws_quotes[sym]
+                        self._last_fetch_ts = time.monotonic()
+                        self._total_ticks_processed += len(ws_quotes)
+                        return dict(self._cached_tickers)
+            except Exception as ws_exc:
+                logger.debug("binance_ws_scan_failed_fallback_to_rest", error=str(ws_exc))
 
         async with self._lock:
             now = time.monotonic()

@@ -70,6 +70,7 @@ class AutonomousEngineService:
         detector: ArbitrageDetector | None = None,
         ai_client: AIAnalysisClient | None = None,
         futures_broker: Any | None = None,
+        binance_gateway: Any | None = None,
     ) -> None:
         self._settings = settings
         self._market_data = market_data
@@ -78,7 +79,10 @@ class AutonomousEngineService:
         self._risk = risk_manager
         self._strategy = strategy_engine
         self._broker = broker
-        self._scanner = scanner or MultiMarketScanner()
+        self._binance_gateway = binance_gateway
+        self._scanner = scanner or MultiMarketScanner(binance_gateway=binance_gateway)
+        if scanner is not None and binance_gateway is not None:
+            self._scanner.set_binance_gateway(binance_gateway)
         self._detector = detector or ArbitrageDetector()
         self._ai_client = ai_client
         self._futures_broker = futures_broker
@@ -497,6 +501,38 @@ class AutonomousEngineService:
                                             qty=str(qty),
                                             price=str(fut_order.executed_price),
                                         )
+
+                                        # Route to Binance Futures Official Connector when configured
+                                        if (
+                                            self._binance_gateway is not None
+                                            and self._binance_gateway.is_configured
+                                        ):
+                                            try:
+                                                side_str = (
+                                                    "BUY"
+                                                    if action == FuturesOrderAction.OPEN_LONG
+                                                    else "SELL"
+                                                )
+                                                await self._binance_gateway.place_order(
+                                                    symbol=symbol,
+                                                    side=side_str,
+                                                    quantity=qty,
+                                                    leverage=2,
+                                                    stop_loss_price=sl_price,
+                                                    take_profit_price=tp_price,
+                                                )
+                                                logger.info(
+                                                    "binance_futures_order_routed",
+                                                    symbol=symbol,
+                                                    side=side_str,
+                                                    qty=str(qty),
+                                                )
+                                            except Exception as bg_err:
+                                                logger.warning(
+                                                    "binance_gateway_order_failed",
+                                                    symbol=symbol,
+                                                    error=str(bg_err),
+                                                )
                     except Exception as f_err:
                         logger.debug(
                             "autonomous_futures_auto_exec_error", symbol=symbol, error=str(f_err)

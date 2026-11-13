@@ -121,6 +121,11 @@ class Settings(BaseSettings):
     strategy_v1: StrategyV1Config = Field(default_factory=StrategyV1Config)
     ai: AIAnalysisConfig = Field(default_factory=AIAnalysisConfig)
 
+    # --- Binance USD(S)-M Futures Gateway & Official Connector ---
+    binance_api_key: SecretStr = Field(default=SecretStr(""))
+    binance_api_secret: SecretStr = Field(default=SecretStr(""))
+    binance_use_testnet: bool = True
+
     # --- Exchange (Public Spot Market Data Only — No Private API Keys) ---
     exchange_id: str = "binance"
     exchange_timeout_ms: int = Field(default=10000, ge=1000, le=60000)

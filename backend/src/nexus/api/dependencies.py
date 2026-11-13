@@ -1,5 +1,7 @@
 """FastAPI Dependency Injection providers."""
 
+from typing import Any
+
 from fastapi import Request
 
 from nexus.application.ai_analysis.service import MarketAnalysisService
@@ -148,4 +150,10 @@ def get_market_analysis_service(request: Request) -> MarketAnalysisService:
         ai_client=ai_client,
         strategy_config=settings.strategy_v1,
     )
+
+
+def get_binance_gateway(request: Request) -> Any | None:
+    """Resolve BinanceFuturesGateway initialized during app lifespan."""
+    return getattr(request.app.state, "binance_gateway", None)
+
 

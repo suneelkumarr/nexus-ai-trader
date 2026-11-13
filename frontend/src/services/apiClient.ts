@@ -383,3 +383,39 @@ export async function fetchCouncilDebate(params: {
     body: JSON.stringify(params),
   });
 }
+
+export async function fetchBinanceGatewayStatus(
+  signal?: AbortSignal,
+): Promise<import("../types/system").BinanceGatewayStatusResponse> {
+  return requestJson<import("../types/system").BinanceGatewayStatusResponse>(
+    "/api/v1/terminal/binance-gateway/status",
+    {
+      method: "GET",
+      signal,
+    },
+  );
+}
+
+export async function testBinanceConnection(
+  params: import("../types/system").BinanceTestConnectionRequest,
+): Promise<import("../types/system").BinanceTestConnectionResponse> {
+  return requestJson<import("../types/system").BinanceTestConnectionResponse>(
+    "/api/v1/terminal/binance-gateway/test-connection",
+    {
+      method: "POST",
+      body: JSON.stringify(params),
+    },
+  );
+}
+
+export async function saveBinanceCredentials(
+  params: import("../types/system").BinanceSaveCredentialsRequest,
+): Promise<import("../types/system").BinanceSaveCredentialsResponse> {
+  return requestJson<import("../types/system").BinanceSaveCredentialsResponse>(
+    "/api/v1/terminal/binance-gateway/credentials",
+    {
+      method: "POST",
+      body: JSON.stringify(params),
+    },
+  );
+}
