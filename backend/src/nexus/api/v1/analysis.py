@@ -11,6 +11,10 @@ from nexus.api.dependencies import (
     get_candle_repository,
     get_market_analysis_service,
 )
+from nexus.application.ai_analysis.council_of_quants import (
+    CouncilDebateResult,
+    CouncilOfQuantsEngine,
+)
 from nexus.application.ai_analysis.service import MarketAnalysisService
 from nexus.application.market_data.service import MarketDataService
 from nexus.application.market_data.validator import get_timeframe_seconds
@@ -166,3 +170,47 @@ async def analyze_from_stored_candles(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(exc),
         ) from exc
+
+
+class CouncilDebateRequest(BaseModel):
+    """Payload to trigger Council of Quants Multi-Agent Debate."""
+
+    symbol: str = "BTC/USDT"
+    timeframe: str = "15m"
+    last_price: float | None = None
+    fast_ema: float | None = None
+    slow_ema: float | None = None
+    rsi: float | None = None
+    volume_ratio: float | None = None
+    market_breadth_pct: float | None = None
+
+
+@router.post(
+    "/council-debate",
+    response_model=CouncilDebateResult,
+    summary="Trigger Multi-Agent Council of Quants Debate (Bull vs Bear vs Arbitrator)",
+)
+async def run_council_debate(
+    payload: CouncilDebateRequest,
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    _auth: Annotated[str, Depends(require_admin_auth)] = "ok",
+) -> CouncilDebateResult:
+    """Execute multi-agent debate synthesis: Momentum Bull vs Risk Skeptic vs Chief Arbitrator."""
+    symbol = payload.symbol.strip().upper()
+    permitted = set(settings.allowed_symbols) | {"BTC/USDT", "ETH/USDT", "SOL/USDT"}
+    if symbol not in permitted:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Symbol '{symbol}' is not permitted in spot universe.",
+        )
+    engine = CouncilOfQuantsEngine()
+    return engine.evaluate_debate(
+        symbol=symbol,
+        timeframe=payload.timeframe,
+        last_price=payload.last_price or 65000.0,
+        fast_ema=payload.fast_ema,
+        slow_ema=payload.slow_ema,
+        rsi=payload.rsi,
+        volume_ratio=payload.volume_ratio,
+        market_breadth_pct=payload.market_breadth_pct or 58.0,
+    )

@@ -1,6 +1,7 @@
 import { frontendConfig } from "../config/env";
 import type {
   BacktestSuiteReport,
+  CouncilDebateResult,
   EmergencyStopResponse,
   ResetKillSwitchResponse,
   HealthResponse,
@@ -345,4 +346,21 @@ export async function toggleFuturesAutoTrade(
       body: JSON.stringify({ enabled }),
     },
   );
+}
+
+export async function fetchCouncilDebate(params: {
+  symbol: string;
+  timeframe?: string;
+  last_price?: number;
+  fast_ema?: number;
+  slow_ema?: number;
+  rsi?: number;
+  volume_ratio?: number;
+  market_breadth_pct?: number;
+}): Promise<CouncilDebateResult> {
+  return requestJson<CouncilDebateResult>("/api/v1/analysis/council-debate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
 }

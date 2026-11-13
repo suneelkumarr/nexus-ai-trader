@@ -342,3 +342,40 @@ export interface CandleSeriesResponse {
   candles: CandleBarDto[];
 }
 
+export interface AgentArgument {
+  category: string;
+  point: string;
+  impact: "HIGH" | "MEDIUM" | "LOW";
+  is_supporting: boolean;
+}
+
+export interface BullThesis {
+  agent_name: string;
+  score: number;
+  key_drivers: string[];
+  arguments: AgentArgument[];
+  recommended_action: "STRONG_BUY" | "BUY" | "ACCUMULATE";
+}
+
+export interface BearThesis {
+  agent_name: string;
+  skepticism_score: number;
+  red_flags: string[];
+  counter_arguments: AgentArgument[];
+  threat_level: "CRITICAL" | "ELEVATED" | "CONTAINED";
+}
+
+export interface CouncilDebateResult {
+  debate_id: string;
+  symbol: string;
+  timeframe: string;
+  timestamp: string;
+  bull_thesis: BullThesis;
+  bear_thesis: BearThesis;
+  consensus_conviction_pct: number;
+  verdict: "APPROVED" | "CONDITIONAL" | "VETOED";
+  verdict_rationale: string;
+  suggested_sizing_multiplier: number;
+  recommended_stop_adjustment: string;
+}
+

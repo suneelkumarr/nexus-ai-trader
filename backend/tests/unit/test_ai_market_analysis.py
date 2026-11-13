@@ -438,3 +438,42 @@ def test_ai_module_has_zero_execution_or_risk_bypass_coupling() -> None:
                             assert forbidden not in alias.name, (
                                 f"Forbidden execution import '{alias.name}' in {py_file.name}"
                             )
+
+
+def test_council_of_quants_multi_agent_debate() -> None:
+    """Verify Council of Quants synthesizes Bull vs Bear debates into binding verdicts."""
+    from nexus.application.ai_analysis.council_of_quants import CouncilOfQuantsEngine
+
+    engine = CouncilOfQuantsEngine()
+
+    # 1. Bullish scenario (EMA20 > EMA50, healthy RSI, volume surge)
+    res_bull = engine.evaluate_debate(
+        symbol="BTC/USDT",
+        timeframe="15m",
+        last_price=65000.0,
+        fast_ema=65500.0,
+        slow_ema=64500.0,
+        rsi=56.0,
+        volume_ratio=1.5,
+        market_breadth_pct=65.0,
+    )
+    assert res_bull.symbol == "BTC/USDT"
+    assert res_bull.bull_thesis.score >= 60
+    assert res_bull.verdict in ("APPROVED", "CONDITIONAL")
+    assert res_bull.consensus_conviction_pct >= 55
+    assert len(res_bull.bull_thesis.key_drivers) > 0
+
+    # 2. Bearish / Exhaustion scenario (Overbought RSI, declining volume)
+    res_bear = engine.evaluate_debate(
+        symbol="SOL/USDT",
+        timeframe="15m",
+        last_price=150.0,
+        fast_ema=148.0,
+        slow_ema=149.0,
+        rsi=74.0,
+        volume_ratio=0.7,
+        market_breadth_pct=30.0,
+    )
+    assert res_bear.bear_thesis.skepticism_score >= 50
+    assert res_bear.verdict in ("CONDITIONAL", "VETOED")
+    assert res_bear.suggested_sizing_multiplier <= 0.6

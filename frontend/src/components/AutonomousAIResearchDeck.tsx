@@ -8,8 +8,10 @@ import {
   Sparkles,
   TrendingDown,
   TrendingUp,
+  Swords,
 } from "lucide-react";
 import type { AIResearchBriefing } from "../types/system";
+import { CouncilOfQuantsDebateModal } from "./common/CouncilOfQuantsDebateModal";
 
 interface AutonomousAIResearchDeckProps {
   briefing: AIResearchBriefing | null;
@@ -21,6 +23,7 @@ export function AutonomousAIResearchDeck({
   onRefresh,
 }: AutonomousAIResearchDeckProps) {
   const [refreshing, setRefreshing] = useState(false);
+  const [councilOpen, setCouncilOpen] = useState(false);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -90,6 +93,15 @@ export function AutonomousAIResearchDeck({
               ? new Date(briefing.updated_at).toLocaleTimeString()
               : "Just now"}
           </span>
+          <button
+            type="button"
+            onClick={() => setCouncilOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 font-mono text-xs font-semibold text-violet-300 transition-all hover:bg-violet-500/20 hover:border-violet-400 active:scale-95"
+            title="Convene Multi-Agent Council of Quants Debate Arena"
+          >
+            <Swords className="h-3.5 w-3.5 text-violet-400" />
+            COUNCIL DEBATE
+          </button>
           <button
             type="button"
             disabled={refreshing}
@@ -220,6 +232,13 @@ export function AutonomousAIResearchDeck({
           )}
         </div>
       </div>
+
+      {councilOpen && (
+        <CouncilOfQuantsDebateModal
+          isOpen={councilOpen}
+          onClose={() => setCouncilOpen(false)}
+        />
+      )}
     </div>
   );
 }

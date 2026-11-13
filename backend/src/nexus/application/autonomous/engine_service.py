@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
+from nexus.application.ai_analysis.council_of_quants import CouncilOfQuantsEngine
 from nexus.application.arbitrage.detector import ArbitrageDetector
 from nexus.application.market_data.multi_market_scanner import MultiMarketScanner
 from nexus.application.persistent_paper_broker import PersistentPaperBroker
@@ -331,6 +332,23 @@ class AutonomousEngineService:
             evaluated.append(symbol)
 
             if eval_result.signal is not None:
+                # Multi-Agent Council of Quants Debate Gate (Phase 1)
+                council = CouncilOfQuantsEngine()
+                debate = council.evaluate_debate(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    last_price=float(bars[-1].close) if bars else 65000.0,
+                    market_breadth_pct=float(self._latest_ai_research.get("sentiment_index", 55)),
+                )
+                if debate.verdict == "VETOED":
+                    logger.info(
+                        "council_of_quants_veto",
+                        symbol=symbol,
+                        conviction=debate.consensus_conviction_pct,
+                        rationale=debate.verdict_rationale,
+                    )
+                    continue
+
                 try:
                     order = await self._broker.execute_strategy_signal(
                         portfolio.id, eval_result.signal, now_utc=now_utc

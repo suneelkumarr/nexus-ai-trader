@@ -9,9 +9,11 @@ import {
   X,
   FileSpreadsheet,
   Scale,
+  Swords,
 } from "lucide-react";
 import { InstitutionalTearsheetModal } from "./common/InstitutionalTearsheetModal";
 import { PortfolioOptimizerModal } from "./common/PortfolioOptimizerModal";
+import { CouncilOfQuantsDebateModal } from "./common/CouncilOfQuantsDebateModal";
 import type {
   EmergencyStopResponse,
   TerminalSnapshotResponse,
@@ -48,6 +50,7 @@ export function TopBar({
   const [refreshing, setRefreshing] = useState(false);
   const [tearsheetOpen, setTearsheetOpen] = useState(false);
   const [optimizerOpen, setOptimizerOpen] = useState(false);
+  const [councilOpen, setCouncilOpen] = useState(false);
 
   const killSwitchActive = snapshot?.risk.kill_switch_active ?? false;
   const engineOk = snapshot?.engine_health.overall_status === "ok";
@@ -187,6 +190,17 @@ export function TopBar({
           >
             <Scale className="h-3 w-3 text-gold-400" />
             <span>OPTIMIZER</span>
+          </button>
+
+          {/* Council of Quants Debate Modal Trigger */}
+          <button
+            type="button"
+            onClick={() => setCouncilOpen(true)}
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-950/30 px-2.5 py-1 font-mono text-[11px] font-semibold text-purple-300 transition-all hover:bg-purple-900/40 shadow"
+            title="Open Council of Quants Multi-Agent Debate Arena (Bull vs Bear vs Arbitrator)"
+          >
+            <Swords className="h-3 w-3 text-purple-400" />
+            <span>COUNCIL</span>
           </button>
 
           {/* Emergency Kill Switch Button */}
@@ -348,6 +362,13 @@ export function TopBar({
       <PortfolioOptimizerModal
         isOpen={optimizerOpen}
         onClose={() => setOptimizerOpen(false)}
+      />
+
+      {/* Council of Quants Multi-Agent Debate Modal */}
+      <CouncilOfQuantsDebateModal
+        isOpen={councilOpen}
+        onClose={() => setCouncilOpen(false)}
+        defaultSymbol="BTC/USDT"
       />
     </header>
   );
