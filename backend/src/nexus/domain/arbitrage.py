@@ -1,9 +1,10 @@
 """Domain models for high-speed multi-market scanning and arbitrage detection."""
 
+import dataclasses
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 ArbitrageStatus = Literal["ACTIVE", "EXPIRED", "FILTERED"]
 FilterReason = Literal[
@@ -24,8 +25,20 @@ MarketSector = Literal[
 ]
 
 
+class DataclassCompatMixin:
+    """Provides Pydantic-like model_copy and model_dump helper methods for dataclasses."""
+
+    def model_copy(self, *, update: dict[str, Any] | None = None) -> Any:
+        if update:
+            return dataclasses.replace(self, **update)
+        return dataclasses.replace(self)
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
 @dataclass(frozen=True)
-class MarketTickerItem:
+class MarketTickerItem(DataclassCompatMixin):
     """Snapshot quote for a single scanned spot pair."""
 
     symbol: str
@@ -41,7 +54,7 @@ class MarketTickerItem:
 
 
 @dataclass(frozen=True)
-class ArbitrageLeg:
+class ArbitrageLeg(DataclassCompatMixin):
     """A single trade leg in a triangular or statistical arbitrage path."""
 
     step: int
@@ -55,7 +68,7 @@ class ArbitrageLeg:
 
 
 @dataclass(frozen=True)
-class TriangularOpportunity:
+class TriangularOpportunity(DataclassCompatMixin):
     """Evaluated triangular arbitrage loop opportunity."""
 
     id: str
@@ -74,7 +87,7 @@ class TriangularOpportunity:
 
 
 @dataclass(frozen=True)
-class SyntheticDislocation:
+class SyntheticDislocation(DataclassCompatMixin):
     """Dislocation between a direct cross pair and its synthetic price."""
 
     base_asset: str
@@ -89,7 +102,7 @@ class SyntheticDislocation:
 
 
 @dataclass(frozen=True)
-class MultiMarketScanResult:
+class MultiMarketScanResult(DataclassCompatMixin):
     """Full snapshot of the 50+ multi-market scanner state."""
 
     timestamp: datetime

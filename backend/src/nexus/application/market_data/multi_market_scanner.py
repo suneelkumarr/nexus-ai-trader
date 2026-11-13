@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import time
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -222,7 +223,7 @@ class MultiMarketScanner:
         if now < self._banned_until_monotonic:
             if self._cached_tickers:
                 return {
-                    k: v.model_copy(update={"is_stale": True})
+                    k: dataclasses.replace(v, is_stale=True)
                     for k, v in self._cached_tickers.items()
                 }
             return self._generate_fallback_tickers()
@@ -236,7 +237,7 @@ class MultiMarketScanner:
             if now < self._banned_until_monotonic:
                 if self._cached_tickers:
                     return {
-                        k: v.model_copy(update={"is_stale": True})
+                        k: dataclasses.replace(v, is_stale=True)
                         for k, v in self._cached_tickers.items()
                     }
                 return self._generate_fallback_tickers()
@@ -314,20 +315,8 @@ class MultiMarketScanner:
                     logger.warning("multi_market_scanner_fetch_failed", error=err_str)
 
                 if self._cached_tickers:
-                    stale_dict = {
-                        k: MarketTickerItem(
-                            symbol=v.symbol,
-                            bid=v.bid,
-                            ask=v.ask,
-                            last=v.last,
-                            spread_bps=v.spread_bps,
-                            change_24h_pct=v.change_24h_pct,
-                            quote_volume_24h=v.quote_volume_24h,
-                            sector=v.sector,
-                            timestamp=v.timestamp,
-                            is_stale=True,
-                        )
+                    return {
+                        k: dataclasses.replace(v, is_stale=True)
                         for k, v in self._cached_tickers.items()
                     }
-                    return stale_dict
                 return self._generate_fallback_tickers()
