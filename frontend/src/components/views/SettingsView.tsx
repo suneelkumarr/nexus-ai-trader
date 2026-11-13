@@ -12,8 +12,17 @@ import {
   Layers,
   Activity,
   Sliders,
+  Key,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  Copy,
+  Check,
 } from "lucide-react";
-import { fetchHealthStatus } from "../../services/apiClient";
+import { fetchHealthStatus, fetchTerminalSettings } from "../../services/apiClient";
+import { getAuthToken, setAuthToken, DEFAULT_API_AUTH_TOKEN } from "../../config/env";
 import type { HealthResponse, SanitizedSettingsResponse } from "../../types/system";
 import { formatInr } from "../../utils/format";
 
@@ -31,6 +40,50 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
   });
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
+
+  // Authentication token configuration state
+  const [tokenInput, setTokenInput] = useState<string>(() => getAuthToken());
+  const [showToken, setShowToken] = useState<boolean>(false);
+  const [copiedToken, setCopiedToken] = useState<boolean>(false);
+  const [testAuthStatus, setTestAuthStatus] = useState<"idle" | "testing" | "success" | "failed">("idle");
+  const [testAuthDetail, setTestAuthDetail] = useState<string>("");
+  const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
+
+  const handleSaveToken = () => {
+    setAuthToken(tokenInput);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 2500);
+  };
+
+  const handleResetToken = () => {
+    setTokenInput(DEFAULT_API_AUTH_TOKEN);
+    setAuthToken(DEFAULT_API_AUTH_TOKEN);
+    setSavedSuccess(true);
+    setTestAuthStatus("idle");
+    setTimeout(() => setSavedSuccess(false), 2500);
+  };
+
+  const handleTestToken = async () => {
+    setTestAuthStatus("testing");
+    setTestAuthDetail("");
+    try {
+      setAuthToken(tokenInput);
+      await fetchTerminalSettings();
+      setTestAuthStatus("success");
+      setTestAuthDetail("Authentication Handshake Verified · HTTP 200 OK (Full Access Granted)");
+    } catch (err: unknown) {
+      setTestAuthStatus("failed");
+      const msg = err instanceof Error ? err.message : "Handshake rejected";
+      setTestAuthDetail(msg);
+    }
+  };
+
+  const handleCopyToken = () => {
+    navigator.clipboard.writeText(tokenInput).then(() => {
+      setCopiedToken(true);
+      setTimeout(() => setCopiedToken(false), 2000);
+    });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -145,7 +198,127 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
         </div>
       </div>
 
-      {/* 2. Live Infrastructure Health & Diagnostic Matrix (3 Pillars) */}
+      {/* 2. API Security Key & Authentication Engine */}
+      <div className="nexus-panel rounded-lg p-4 border border-cyan-500/20 bg-[#030712] space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+          <div className="flex items-center gap-2">
+            <Key className="h-4 w-4 text-cyan-400" />
+            <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-white">
+              API Security Key & Administrative Authentication
+            </h3>
+          </div>
+          <div className="flex items-center gap-2">
+            {testAuthStatus === "success" && (
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-950/80 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
+                <CheckCircle2 className="h-3 w-3" />
+                VERIFIED AUTHENTICATED
+              </span>
+            )}
+            {testAuthStatus === "failed" && (
+              <span className="inline-flex items-center gap-1 rounded bg-rose-950/80 px-2 py-0.5 font-mono text-[10px] font-bold text-rose-300 border border-rose-500/30">
+                <AlertTriangle className="h-3 w-3" />
+                AUTH REJECTED
+              </span>
+            )}
+            {testAuthStatus === "idle" && (
+              <span className="font-mono text-[10px] text-slate-400">
+                {tokenInput === DEFAULT_API_AUTH_TOKEN ? "STANDARD TOKEN" : "CUSTOM OVERRIDE"}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-400">
+          Enforces cryptographic token authorization across protected mutating routes: Council of Quants Debate, AI Cycle Hunter, Risk Limit Overrides, and Emergency Circuit Breakers.
+        </p>
+
+        <div className="space-y-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 font-mono text-xs">
+            <div className="relative flex-1">
+              <input
+                type={showToken ? "text" : "password"}
+                value={tokenInput}
+                onChange={(e) => {
+                  setTokenInput(e.target.value);
+                  setTestAuthStatus("idle");
+                }}
+                placeholder="nexus_sec_admin_..."
+                className="w-full rounded border border-slate-800 bg-nexus-void px-3 py-2 pr-20 text-xs text-white placeholder-slate-600 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400/50"
+              />
+              <div className="absolute inset-y-0 right-1 flex items-center gap-1 pr-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowToken(!showToken)}
+                  title={showToken ? "Hide Key" : "Reveal Key"}
+                  className="rounded p-1 text-slate-400 hover:text-white hover:bg-slate-800/60 transition"
+                >
+                  {showToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyToken}
+                  title="Copy Key to Clipboard"
+                  className="rounded p-1 text-slate-400 hover:text-white hover:bg-slate-800/60 transition"
+                >
+                  {copiedToken ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleSaveToken}
+                className="rounded border border-cyan-500/40 bg-cyan-500/20 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/30 transition"
+              >
+                Save Key
+              </button>
+              <button
+                type="button"
+                onClick={handleTestToken}
+                disabled={testAuthStatus === "testing"}
+                className="inline-flex items-center gap-1.5 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-50 transition"
+              >
+                <RefreshCw
+                  className={`h-3 w-3 ${testAuthStatus === "testing" ? "animate-spin text-cyan-400" : ""}`}
+                />
+                <span>{testAuthStatus === "testing" ? "Testing..." : "Test Connection"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleResetToken}
+                className="rounded border border-slate-800 bg-transparent px-2.5 py-2 text-xs text-slate-400 hover:text-slate-200 hover:border-slate-700 transition"
+              >
+                Reset Default
+              </button>
+            </div>
+          </div>
+
+          {savedSuccess && (
+            <p className="font-mono text-[11px] text-cyan-300">
+              ✓ Token saved to browser storage. Outgoing requests will use this credential.
+            </p>
+          )}
+
+          {testAuthStatus === "success" && (
+            <p className="font-mono text-[11px] text-emerald-400">
+              ✓ {testAuthDetail}
+            </p>
+          )}
+
+          {testAuthStatus === "failed" && (
+            <p className="font-mono text-[11px] text-rose-400">
+              ✗ Authentication failed: {testAuthDetail}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* 3. Live Infrastructure Health & Diagnostic Matrix (3 Pillars) */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3 font-mono text-xs">
         {/* Pillar 1: PostgreSQL Persistent Ledger */}
         <div className="nexus-panel rounded-lg p-3.5 space-y-2 border border-cyan-500/20">

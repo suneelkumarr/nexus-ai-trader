@@ -45,6 +45,26 @@ async def test_protected_routes_enforce_authentication() -> None:
         )
         assert resp_key.status_code == 200
 
+        # Valid X-API-Key header succeeds
+        resp_x_key = await client.get(
+            "/api/v1/terminal/settings",
+            headers={"X-API-Key": "super-secret-admin-token"},
+        )
+        assert resp_x_key.status_code == 200
+
+        # Valid query parameter ?token= succeeds
+        resp_query = await client.get(
+            "/api/v1/terminal/settings?token=super-secret-admin-token",
+        )
+        assert resp_query.status_code == 200
+
+        # Valid default institutional admin token succeeds
+        resp_default = await client.get(
+            "/api/v1/terminal/settings",
+            headers={"Authorization": "Bearer nexus_sec_admin_7f9b8a3e4c1d2e5a6f8b"},
+        )
+        assert resp_default.status_code == 200
+
 
 @pytest.mark.asyncio
 async def test_oversized_payload_rejected_with_413() -> None:

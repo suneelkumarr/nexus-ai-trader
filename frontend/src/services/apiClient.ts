@@ -26,10 +26,12 @@ async function requestJson<T>(
   init: RequestInit = {},
 ): Promise<T> {
   const baseUrl = frontendConfig.apiBaseUrl.replace(/\/+$/, "");
-  const authHeaders: Record<string, string> = frontendConfig.apiAuthToken
+  const token = frontendConfig.apiAuthToken;
+  const authHeaders: Record<string, string> = token
     ? {
-        Authorization: `Bearer ${frontendConfig.apiAuthToken}`,
-        "X-Nexus-API-Key": frontendConfig.apiAuthToken,
+        Authorization: `Bearer ${token}`,
+        "X-Nexus-API-Key": token,
+        "X-API-Key": token,
       }
     : {};
   const response = await fetch(`${baseUrl}${path}`, {
@@ -185,6 +187,24 @@ export async function syncCandles(params: {
         timeframe: params.timeframe,
         lookback_bars: params.lookback_bars ?? 250,
       }),
+    },
+  );
+}
+
+export async function fetchPortfolioStatistics(params?: {
+  timeframe?: string;
+  lookback_bars?: number;
+  signal?: AbortSignal;
+}): Promise<import("../types/system").PortfolioStatisticsResponse> {
+  const q = new URLSearchParams({
+    timeframe: params?.timeframe ?? "4h",
+    lookback_bars: String(params?.lookback_bars ?? 720),
+  }).toString();
+  return requestJson<import("../types/system").PortfolioStatisticsResponse>(
+    `/api/v1/terminal/portfolio-stats?${q}`,
+    {
+      method: "GET",
+      signal: params?.signal,
     },
   );
 }

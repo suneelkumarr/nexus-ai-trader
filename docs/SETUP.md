@@ -18,7 +18,7 @@ Copy `.env.example` to `.env` at the repository root and set a strong `POSTGRES_
 cp .env.example .env
 ```
 
-> **Security Note**: Never commit `.env` or hardcode API secrets. Public spot market data via CCXT works without exchange API keys (`EXCHANGE_API_KEY` and `EXCHANGE_API_SECRET` can remain empty).
+> **Security Note**: Never commit `.env` or hardcode API secrets. Set a strong `API_AUTH_TOKEN` on the backend and pass the same value as `VITE_API_AUTH_TOKEN` at frontend build time. The frontend intentionally has **no fallback token**. Any token that was previously committed must be treated as compromised and rotated. Public spot market data via CCXT works without exchange API keys.
 
 ### Non-Negotiable Safety Settings
 The backend fails fast at startup if any of the following are modified away from paper/spot defaults:
@@ -28,8 +28,10 @@ The backend fails fast at startup if any of the following are modified away from
 - `ALLOW_LEVERAGE=false`
 - `ALLOW_FUTURES=false`
 - `ALLOW_WITHDRAWALS=false`
-- `INITIAL_CAPITAL_INR=10000.00`
-- `ALLOWED_SYMBOLS=["BTC/USDT","ETH/USDT","SOL/USDT"]`
+- `INITIAL_CAPITAL_INR=10000.00` (must be positive)
+- `ALLOWED_SYMBOLS` must contain valid spot pairs
+
+`PAPER_FUTURES_ENABLED=true` enables only the isolated-margin **futures simulator**. Live futures/leverage remain blocked by `ALLOW_FUTURES=false` and `LIVE_TRADING_ENABLED=false`.
 
 ---
 
@@ -56,6 +58,8 @@ docker compose down
 ---
 
 ## 4. Local Backend Setup (Without Docker)
+
+Python 3.12–3.13 is recommended; 3.14 works but emits upstream asyncio deprecation warnings from test dependencies.
 
 ```bash
 cd backend

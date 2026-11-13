@@ -340,6 +340,29 @@ export interface AutonomousEngineStatus {
   recent_orders_placed?: string[];
 }
 
+export interface AssetStatistics {
+  symbol: string;
+  annualized_return_pct: number;
+  annualized_volatility_pct: number;
+  observations: number;
+}
+
+export interface CorrelationPair {
+  left: string;
+  right: string;
+  correlation: number;
+}
+
+export interface PortfolioStatisticsResponse {
+  available: boolean;
+  reason: string | null;
+  as_of: string | null;
+  timeframe: string;
+  observations: number;
+  assets: AssetStatistics[];
+  correlations: CorrelationPair[];
+}
+
 export interface CandleBarDto {
   time: number;
   open: number;

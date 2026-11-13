@@ -228,6 +228,35 @@ class SyncCandlesResponse(BaseModel):
     message: str
 
 
+class AssetStatistics(BaseModel):
+    """Annualized return/volatility derived from stored OHLCV closes."""
+
+    symbol: str
+    annualized_return_pct: float
+    annualized_volatility_pct: float
+    observations: int
+
+
+class CorrelationPair(BaseModel):
+    """Pairwise Pearson correlation of periodic returns."""
+
+    left: str
+    right: str
+    correlation: float
+
+
+class PortfolioStatisticsResponse(BaseModel):
+    """Real historical statistics for mean-variance portfolio construction."""
+
+    available: bool
+    reason: str | None = None
+    as_of: datetime | None = None
+    timeframe: str
+    observations: int
+    assets: list[AssetStatistics]
+    correlations: list[CorrelationPair]
+
+
 class SanitizedSettingsResponse(BaseModel):
     """Read-only non-secret runtime configuration exposed to Settings tab."""
 
@@ -860,6 +889,136 @@ async def sync_candles_endpoint(
             f"Successfully synchronized {summary.stored_count} closed {norm_tf} candles "
             f"for {norm_sym}. Total stored in database: {len(stored_bars)} bars."
         ),
+    )
+
+
+@router.get(
+    "/terminal/portfolio-stats",
+    response_model=PortfolioStatisticsResponse,
+    summary="Historical return, volatility, and correlation statistics for allowed spot assets",
+)
+async def get_portfolio_statistics(
+    candle_repo: Annotated[CandleRepository, Depends(get_candle_repository)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    market_data: Annotated[MarketDataProvider, Depends(get_market_data_provider)],
+    timeframe: Annotated[str, Query()] = "4h",
+    lookback_bars: Annotated[int, Query(ge=60, le=2000)] = 720,
+) -> PortfolioStatisticsResponse:
+    """Compute statistics from persisted candles only; returns unavailable instead of estimating."""
+    import pandas as pd
+
+    from nexus.application.market_data.service import MarketDataService
+
+    norm_tf = timeframe.strip().lower()
+    if norm_tf not in settings.supported_timeframes:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Timeframe '{norm_tf}' is not supported.",
+        )
+
+    core_symbols = [
+        s for s in ("BTC/USDT", "ETH/USDT", "SOL/USDT") if s in settings.allowed_symbols
+    ]
+    if len(core_symbols) < 2:
+        core_symbols = settings.allowed_symbols[:3]
+    if len(core_symbols) < 2:
+        return PortfolioStatisticsResponse(
+            available=False,
+            reason="At least two allowed spot symbols are required for portfolio statistics.",
+            timeframe=norm_tf,
+            observations=0,
+            assets=[],
+            correlations=[],
+        )
+
+    close_series: dict[str, dict[datetime, float]] = {}
+    for sym in core_symbols:
+        bars = await candle_repo.get_candles(
+            exchange_id=settings.exchange_id,
+            symbol=sym,
+            timeframe=norm_tf,
+            limit=lookback_bars,
+        )
+        if len(bars) < 61 and isinstance(market_data, MarketDataService):
+            try:
+                sec = get_timeframe_seconds(norm_tf)
+                now_utc = datetime.now(UTC)
+                await market_data.download_historical(
+                    symbol=sym,
+                    timeframe=norm_tf,
+                    start_utc=now_utc - timedelta(seconds=sec * (lookback_bars + 20)),
+                    end_utc=now_utc,
+                )
+                bars = await candle_repo.get_candles(
+                    exchange_id=settings.exchange_id,
+                    symbol=sym,
+                    timeframe=norm_tf,
+                    limit=lookback_bars,
+                )
+            except Exception:
+                pass
+        if len(bars) >= 61:
+            close_series[sym] = {b.timestamp: float(b.close) for b in bars}
+
+    if len(close_series) < 2:
+        return PortfolioStatisticsResponse(
+            available=False,
+            reason=(
+                "Insufficient persisted OHLCV history for at least two assets. "
+                "Sync candles from the Backtesting tab first."
+            ),
+            timeframe=norm_tf,
+            observations=0,
+            assets=[],
+            correlations=[],
+        )
+
+    frame = pd.DataFrame(close_series).sort_index().dropna()
+    returns = frame.pct_change().dropna()
+    if len(returns) < 20:
+        return PortfolioStatisticsResponse(
+            available=False,
+            reason="Not enough overlapping return observations to estimate statistics.",
+            timeframe=norm_tf,
+            observations=int(len(returns)),
+            assets=[],
+            correlations=[],
+        )
+
+    periods_per_year = {"5m": 105120.0, "15m": 35040.0, "1h": 8760.0, "4h": 2190.0}
+    periods = periods_per_year.get(norm_tf, 2190.0)
+    assets: list[AssetStatistics] = []
+    for sym in returns.columns:
+        series = returns[sym]
+        assets.append(
+            AssetStatistics(
+                symbol=str(sym),
+                annualized_return_pct=round(float(series.mean()) * periods * 100.0, 4),
+                annualized_volatility_pct=round(float(series.std()) * (periods**0.5) * 100.0, 4),
+                observations=int(series.count()),
+            )
+        )
+
+    corr = returns.corr()
+    correlations: list[CorrelationPair] = []
+    columns = list(corr.columns)
+    for i, left in enumerate(columns):
+        for right in columns[i + 1 :]:
+            value = float(corr.loc[left, right])
+            if value != value:  # NaN guard
+                continue
+            correlations.append(
+                CorrelationPair(left=str(left), right=str(right), correlation=round(value, 6))
+            )
+
+    last_ts = frame.index[-1]
+    return PortfolioStatisticsResponse(
+        available=True,
+        as_of=last_ts.to_pydatetime() if hasattr(last_ts, "to_pydatetime") else None,
+        timeframe=norm_tf,
+        observations=int(len(returns)),
+        assets=assets,
+        correlations=correlations,
     )
 
 

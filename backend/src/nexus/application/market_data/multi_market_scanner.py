@@ -217,7 +217,7 @@ class MultiMarketScanner:
         return dict(res)
 
     async def scan_markets(self, force_refresh: bool = False) -> dict[str, MarketTickerItem]:
-        """Fetch quotes for all symbols using batch CCXT query."""
+        """Fetch quotes for all 54 symbols using batch CCXT query."""
         now = time.monotonic()
         if now < self._banned_until_monotonic:
             if self._cached_tickers:

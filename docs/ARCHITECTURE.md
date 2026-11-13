@@ -8,7 +8,7 @@
 1. **Paper Trading Only**: Live order placement, real-money transfers, and exchange withdrawals are architecturally impossible. `TradingMode` only permits `PAPER`; configuration validation rejects any attempt to enable live execution.
 2. **Spot Markets Only**: Leverage, margin, perpetuals, futures, options, and short-selling beyond spot holdings are explicitly blocked at both configuration and domain risk-guard layers.
 3. **Initial Virtual Capital**: Every newly initialized portfolio starts with **INR 10,000.00** (`base_currency = "INR"`, `initial_capital = 10000.00`).
-4. **Initial Asset Universe**: Restricted to `BTC/USDT`, `ETH/USDT`, and `SOL/USDT` (configurable via validated environment settings, defaulting strictly to this set).
+4. **Asset Universe**: Defaults to `BTC/USDT`, `ETH/USDT`, and `SOL/USDT` for the trading loop. `ALLOWED_SYMBOLS` is configurable; the example environment enables a 54-pair spot scanner/analytics universe. All symbols are validated as spot pairs at startup.
 5. **No Fake Exchange Results**: Market data adapters (`CCXTMarketDataProvider`) fetch real public spot market data from the configured exchange via CCXT and never synthesize or hardcode fake tickers, candles, or order book ticks. Failures propagate explicitly through typed domain exceptions.
 6. **Backend / Frontend Independence**: The `frontend` (`React + TypeScript + Three.js`) communicates exclusively over versioned HTTP/REST contracts (`/api/v1/...`) and contains zero trading, pricing, or risk logic.
 
@@ -96,7 +96,7 @@ nexus/
 ## 4. Module Responsibilities
 
 ### 4.1 `nexus.core`
-- **`config.py`**: Loads environment settings via `pydantic-settings`. Enforces invariants at startup: `trading_mode == "paper"`, `market_type == "spot"`, `live_trading_enabled is False`, `allow_leverage is False`, `allow_futures is False`, `allow_withdrawals is False`, `initial_capital_inr == Decimal("10000.00")`. Credentials (e.g., DB password, optional read-only exchange keys) are never hardcoded.
+- **`config.py`**: Loads environment settings via `pydantic-settings`. Enforces invariants at startup: `trading_mode == "paper"`, `market_type == "spot"`, `live_trading_enabled is False`, `allow_leverage is False`, `allow_futures is False`, `allow_withdrawals is False`, and `initial_capital_inr > 0` (default `Decimal("10000.00")`). `PAPER_FUTURES_ENABLED` controls the isolated-margin futures **simulator** only; it cannot enable live futures. Credentials are never hardcoded.
 - **`logging.py`**: Configures `structlog` + stdlib logging bridge. Outputs machine-readable JSON in production and colored key-value logs in local development. Automatically binds `service`, `environment`, `request_id` (via `contextvars`), and redacts sensitive keys (`password`, `secret`, `api_key`, `token`).
 - **`exceptions.py`**: Typed hierarchy (`NexusError`, `ConfigurationInvariantError`, `RiskViolationError`, `MarketDataUnavailableError`, `InsufficientBalanceError`, `DatabaseUnavailableError`).
 
@@ -135,7 +135,10 @@ nexus/
   - `GET /api/v1/health/ready`: Readiness probe (verifies PostgreSQL connectivity and configuration invariants; returns HTTP `503` when DB is unavailable).
 
 ### 4.6 `nexus.workers`
-- **`scheduler.py`**: Automated paper-trading loop runner accepting injected `MarketDataProvider`, `Strategy`, `PaperBroker`, and `PortfolioService`.
+- **`scheduler.py`**: Testable cycle orchestrator (`AutonomousPaperTradingOrchestrator`) used by the unit suite. The production runtime loop is `AutonomousEngineService` in `nexus.application.autonomous`.
+
+### 4.6b `nexus.application.futures`
+- **`broker.py`**: Isolated-margin futures **paper simulator** (no exchange order routing). It shares the paper portfolio cash balance, respects the persisted kill switch, and is only constructed when `PAPER_FUTURES_ENABLED=true`.
 
 ### 4.7 `frontend`
 - Completely standalone TypeScript SPA (`React + Vite + Three.js`).
