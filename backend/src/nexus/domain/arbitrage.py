@@ -25,20 +25,8 @@ MarketSector = Literal[
 ]
 
 
-class DataclassCompatMixin:
-    """Provides Pydantic-like model_copy and model_dump helper methods for dataclasses."""
-
-    def model_copy(self, *, update: dict[str, Any] | None = None) -> Any:
-        if update:
-            return dataclasses.replace(self, **update)
-        return dataclasses.replace(self)
-
-    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        return dataclasses.asdict(self)
-
-
 @dataclass(frozen=True)
-class MarketTickerItem(DataclassCompatMixin):
+class MarketTickerItem:
     """Snapshot quote for a single scanned spot pair."""
 
     symbol: str
@@ -52,9 +40,19 @@ class MarketTickerItem(DataclassCompatMixin):
     timestamp: datetime
     is_stale: bool = False
 
+    def model_copy(self, *, update: dict[str, Any] | None = None) -> MarketTickerItem:
+        """Pydantic-like compatibility method for frozen dataclass."""
+        if update:
+            return dataclasses.replace(self, **update)
+        return dataclasses.replace(self)
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Pydantic-like compatibility method returning dict."""
+        return dataclasses.asdict(self)
+
 
 @dataclass(frozen=True)
-class ArbitrageLeg(DataclassCompatMixin):
+class ArbitrageLeg:
     """A single trade leg in a triangular or statistical arbitrage path."""
 
     step: int
@@ -66,9 +64,17 @@ class ArbitrageLeg(DataclassCompatMixin):
     fee_bps: Decimal
     slippage_bps: Decimal
 
+    def model_copy(self, *, update: dict[str, Any] | None = None) -> ArbitrageLeg:
+        if update:
+            return dataclasses.replace(self, **update)
+        return dataclasses.replace(self)
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        return dataclasses.asdict(self)
+
 
 @dataclass(frozen=True)
-class TriangularOpportunity(DataclassCompatMixin):
+class TriangularOpportunity:
     """Evaluated triangular arbitrage loop opportunity."""
 
     id: str
@@ -85,9 +91,17 @@ class TriangularOpportunity(DataclassCompatMixin):
     detected_at: datetime
     quality_score: Decimal  # 0.0 to 1.0 (SOTA candidate score)
 
+    def model_copy(self, *, update: dict[str, Any] | None = None) -> TriangularOpportunity:
+        if update:
+            return dataclasses.replace(self, **update)
+        return dataclasses.replace(self)
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        return dataclasses.asdict(self)
+
 
 @dataclass(frozen=True)
-class SyntheticDislocation(DataclassCompatMixin):
+class SyntheticDislocation:
     """Dislocation between a direct cross pair and its synthetic price."""
 
     base_asset: str
@@ -100,9 +114,17 @@ class SyntheticDislocation(DataclassCompatMixin):
     direction: DislocationDirection
     detected_at: datetime
 
+    def model_copy(self, *, update: dict[str, Any] | None = None) -> SyntheticDislocation:
+        if update:
+            return dataclasses.replace(self, **update)
+        return dataclasses.replace(self)
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        return dataclasses.asdict(self)
+
 
 @dataclass(frozen=True)
-class MultiMarketScanResult(DataclassCompatMixin):
+class MultiMarketScanResult:
     """Full snapshot of the 50+ multi-market scanner state."""
 
     timestamp: datetime
@@ -114,3 +136,11 @@ class MultiMarketScanResult(DataclassCompatMixin):
     markets: list[MarketTickerItem]
     triangular_opportunities: list[TriangularOpportunity]
     synthetic_dislocations: list[SyntheticDislocation]
+
+    def model_copy(self, *, update: dict[str, Any] | None = None) -> MultiMarketScanResult:
+        if update:
+            return dataclasses.replace(self, **update)
+        return dataclasses.replace(self)
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        return dataclasses.asdict(self)

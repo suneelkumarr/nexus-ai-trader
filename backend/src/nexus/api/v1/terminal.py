@@ -632,7 +632,7 @@ async def run_terminal_backtest(
         slippage_bps=payload.slippage_bps,
         risk_config=settings.risk,
     )
-    evaluator = None
+    evaluator: Any = None
     strat_key = payload.strategy_id.strip().lower()
     if strat_key == "v2":
         from nexus.application.backtesting.engine import StrategyV2BacktestAdapter

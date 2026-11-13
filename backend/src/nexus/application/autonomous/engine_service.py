@@ -433,7 +433,8 @@ class AutonomousEngineService:
                         self._strategy_trades_count += 1
                         desc = f"SPOT {order.side.value.upper()} {symbol}"
                         orders_placed.append(desc)
-                        self._recent_orders.append(f"{desc} @ {order.executed_price_usdt}")
+                        exec_price = order.fill.executed_price_usdt if order.fill else "MKT"
+                        self._recent_orders.append(f"{desc} @ {exec_price}")
                 except Exception as exc:
                     logger.warning("autonomous_order_exec_failed", symbol=symbol, error=str(exc))
 
