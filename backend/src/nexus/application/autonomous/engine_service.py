@@ -353,7 +353,7 @@ class AutonomousEngineService:
             except Exception as exc:
                 logger.debug("arbitrage_loop_tick_error", error=str(exc))
 
-            await asyncio.sleep(4.0)
+            await asyncio.sleep(12.0)
 
     async def _evaluate_arbitrage_cycle(self) -> dict[str, Any]:
         """Scan 54 markets and execute paper arbitrage if profitable after roundtrip fee."""

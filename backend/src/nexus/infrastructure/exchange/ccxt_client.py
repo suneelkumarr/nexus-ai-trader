@@ -160,6 +160,12 @@ class CCXTPublicExchangeClient:
             "timeout": timeout_ms,
             "options": {"defaultType": "spot"},
         }
+        if self._exchange_id == "binance":
+            public_config["urls"] = {
+                "api": {
+                    "public": "https://data-api.binance.vision/api/v3",
+                }
+            }
 
         if rest_factory is not None:
             self._rest = rest_factory(self._exchange_id, dict(public_config))
