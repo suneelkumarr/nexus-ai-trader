@@ -9,18 +9,24 @@ import {
   TrendingDown,
   TrendingUp,
   Swords,
+  Radio,
+  ArrowUpRight,
+  ArrowDownRight,
+  Zap,
 } from "lucide-react";
-import type { AIResearchBriefing } from "../types/system";
+import type { AIResearchBriefing, AutonomousEngineStatus } from "../types/system";
 import { CouncilOfQuantsDebateModal } from "./common/CouncilOfQuantsDebateModal";
 
 interface AutonomousAIResearchDeckProps {
   briefing: AIResearchBriefing | null;
   onRefresh: () => Promise<void>;
+  status?: AutonomousEngineStatus | null;
 }
 
 export function AutonomousAIResearchDeck({
   briefing,
   onRefresh,
+  status,
 }: AutonomousAIResearchDeckProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [councilOpen, setCouncilOpen] = useState(false);
@@ -231,6 +237,143 @@ export function AutonomousAIResearchDeck({
             ))
           )}
         </div>
+      </div>
+
+      {/* Binance Spot & Futures Real-Time Opportunity Radar (110+ Coins) */}
+      <div className="mt-4 rounded-xl border border-white/[0.08] bg-[#020617]/90 p-4 shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+              <Radio className="h-4 w-4 animate-pulse text-cyan-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-display text-xs font-bold uppercase tracking-wider text-white">
+                  Binance Spot & Futures Opportunity Radar
+                </span>
+                <span className="rounded bg-gradient-to-r from-cyan-950 to-blue-950 px-2 py-0.5 font-mono text-[9px] font-bold text-cyan-300 border border-cyan-500/40">
+                  {status?.universe_size ?? 110}+ COINS ACTIVE
+                </span>
+                <span className="rounded bg-emerald-950/80 px-2 py-0.5 font-mono text-[9px] font-bold text-emerald-300 border border-emerald-500/30">
+                  SPOT BUY + FUTURES LONG/SHORT
+                </span>
+              </div>
+              <p className="font-mono text-[10px] text-slate-400 mt-0.5">
+                Continuous high-throughput scanning across all liquid Binance markets with automated order placement.
+              </p>
+            </div>
+          </div>
+
+          {/* Currently evaluated cycle queue */}
+          {status?.recently_evaluated_symbols && status.recently_evaluated_symbols.length > 0 && (
+            <div className="flex items-center gap-1.5 font-mono text-[10px] text-slate-400">
+              <span className="text-slate-500">Live Cycle Queue:</span>
+              <div className="flex flex-wrap items-center gap-1">
+                {status.recently_evaluated_symbols.slice(0, 6).map((sym) => (
+                  <span
+                    key={sym}
+                    className="rounded bg-slate-900 px-1.5 py-0.5 text-slate-300 border border-white/5"
+                  >
+                    {sym.replace("/USDT", "")}
+                  </span>
+                ))}
+                {status.recently_evaluated_symbols.length > 6 && (
+                  <span className="text-slate-500">
+                    +{status.recently_evaluated_symbols.length - 6} more
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Live Opportunities Cards Grid */}
+        <div className="mt-3.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          {(!status?.recent_opportunities || status.recent_opportunities.length === 0) ? (
+            <div className="col-span-full rounded-lg border border-white/5 bg-slate-950/50 p-4 text-center font-mono text-xs text-slate-500">
+              Scanning 110+ Binance Spot & Futures pairs for breakout and mean-reversion setups...
+            </div>
+          ) : (
+            status.recent_opportunities.slice(0, 8).map((opp) => (
+              <div
+                key={opp.symbol}
+                className="group relative overflow-hidden rounded-xl border border-white/[0.06] bg-slate-950/70 p-3 transition-all hover:border-cyan-500/40 hover:bg-slate-900/60 shadow-inner"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-xs font-bold text-white">
+                      {opp.symbol}
+                    </span>
+                    <span className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-[8px] text-slate-400 border border-white/5 uppercase">
+                      {opp.sector.replace("_", " ")}
+                    </span>
+                  </div>
+                  <span
+                    className={`rounded px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider border ${
+                      opp.type === "BREAKOUT"
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                        : opp.type === "DIP_REVERSAL"
+                          ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                          : "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+                    }`}
+                  >
+                    {opp.type}
+                  </span>
+                </div>
+
+                <div className="mt-2.5 flex items-center justify-between font-mono text-xs">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">Price</span>
+                    <span className="font-bold text-slate-200">
+                      ${opp.last_price >= 1 ? opp.last_price.toFixed(2) : opp.last_price.toFixed(4)}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-500 block">24h Momentum</span>
+                    <span
+                      className={`inline-flex items-center gap-0.5 font-bold tabular-nums ${
+                        opp.change_24h_pct >= 0 ? "text-emerald-400" : "text-rose-400"
+                      }`}
+                    >
+                      {opp.change_24h_pct >= 0 ? (
+                        <ArrowUpRight className="h-3 w-3" />
+                      ) : (
+                        <ArrowDownRight className="h-3 w-3" />
+                      )}
+                      {opp.change_24h_pct >= 0 ? "+" : ""}
+                      {opp.change_24h_pct.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-2 flex items-center justify-between border-t border-white/[0.04] pt-2 font-mono text-[9px]">
+                  <span className="text-slate-400">Score: {opp.score}</span>
+                  <span className="text-cyan-400/90 font-semibold">Dual Spot+Futures</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Live Orders Placed Blotter */}
+        {status?.recent_orders_placed && status.recent_orders_placed.length > 0 && (
+          <div className="mt-3.5 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-950/20 p-2.5 font-mono text-xs">
+            <span className="text-emerald-400 text-[11px] font-bold flex items-center gap-1">
+              <Zap className="h-3 w-3" />
+              Recent Autonomous Executions:
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {status.recent_orders_placed.slice(-4).map((orderDesc, idx) => (
+                <span
+                  key={idx}
+                  className="rounded bg-slate-900/90 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/30"
+                >
+                  ⚡ {orderDesc}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {councilOpen && (

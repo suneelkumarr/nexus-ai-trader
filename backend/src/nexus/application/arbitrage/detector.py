@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-import time
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -14,7 +12,6 @@ from nexus.domain.arbitrage import (
     FilterReason,
     MarketTickerItem,
     MultiMarketScanResult,
-    ScannerTelemetry,
     SyntheticDislocation,
     TriangularOpportunity,
 )
@@ -32,17 +29,13 @@ class ArbitrageDetector:
         self._fee_bps = paper_fee_bps_per_leg
         self._slippage_bps = paper_slippage_bps_per_leg
         self._clip_usdt = standard_clip_usdt
-        self._start_time = time.monotonic()
-        self._tick_counter: int = 14280
 
     def evaluate(self, tickers: dict[str, MarketTickerItem]) -> MultiMarketScanResult:
-        """Scan all tickers for triangular loops, synthetic dislocations, and build telemetry."""
+        """Scan all tickers for triangular loops and synthetic dislocations."""
         utc_now = datetime.now(UTC)
-        self._tick_counter += len(tickers)
 
         triangular_opps = self._evaluate_triangles(tickers, utc_now)
         synthetic_dislocations = self._evaluate_synthetic_crosses(tickers, utc_now)
-        telemetry = self._build_telemetry(tickers)
 
         market_list = list(tickers.values())
         total_markets = len(market_list)
@@ -65,7 +58,6 @@ class ArbitrageDetector:
             markets=market_list,
             triangular_opportunities=triangular_opps,
             synthetic_dislocations=synthetic_dislocations,
-            telemetry=telemetry,
         )
 
     def _evaluate_triangles(
@@ -239,34 +231,3 @@ class ArbitrageDetector:
             )
 
         return dislocations
-
-    def _build_telemetry(self, tickers: dict[str, MarketTickerItem]) -> ScannerTelemetry:
-        """Construct live telemetry fields matching the Stanford/Claude video UI."""
-        elapsed = time.monotonic() - self._start_time
-
-        yaw = round((elapsed * 12.0) % 360.0, 1)
-        pitch = round(35.0 + math.sin(elapsed * 0.3) * 15.0, 1)
-
-        load_wave: list[float] = []
-        for i in range(24):
-            val = 90.0 + 4.5 * math.sin((elapsed + i * 2.0) * 0.4)
-            load_wave.append(round(val, 1))
-
-        return ScannerTelemetry(
-            load_90s=load_wave,
-            cypher_queries_per_sec=round(260.0 + 12.0 * math.sin(elapsed * 0.5), 1),
-            hacks_blocked_per_sec=round(4.2 + 0.6 * math.cos(elapsed * 0.7), 1),
-            yaw_deg=yaw,
-            pitch_deg=pitch,
-            graph_r_min=120,
-            graph_r_max=480,
-            nodes_count=len(tickers),
-            edges_count=len(tickers) * 3,
-            sota_gain_pct=28.4,
-            fps=60.0,
-            system_buffer_verified_pct=99.8,
-            scanner_compute_split_pct=40.0,
-            ai_compute_split_pct=60.0,
-            active_pods_count=len(tickers),
-            total_pods_count=len(tickers),
-        )

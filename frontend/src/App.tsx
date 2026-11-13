@@ -39,6 +39,7 @@ export function App() {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [engineStatus, setEngineStatus] = useState<AutonomousEngineStatus | null>(null);
   const [aiBriefing, setAiBriefing] = useState<AIResearchBriefing | null>(null);
+  const futuresEnabled = settings?.paper_futures_enabled ?? true;
 
   const {
     snapshot,
@@ -70,6 +71,13 @@ export function App() {
 
     return () => controller.abort();
   }, []);
+
+  // Do not leave the operator on a disabled futures tab after settings load.
+  useEffect(() => {
+    if (!futuresEnabled && activeTab === "Futures Trading") {
+      setActiveTab("Overview");
+    }
+  }, [futuresEnabled, activeTab]);
 
   // Poll autonomous engine status and AI research
   useEffect(() => {
@@ -134,6 +142,7 @@ export function App() {
           onSelectTab={setActiveTab}
           killSwitchActive={snapshot?.risk.kill_switch_active ?? false}
           openPositionsCount={snapshot?.open_positions.length ?? 0}
+          futuresEnabled={futuresEnabled}
         />
 
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-5 pb-20 lg:pb-5">
@@ -162,6 +171,7 @@ export function App() {
                   <AutonomousAIResearchDeck
                     briefing={aiBriefing}
                     onRefresh={handleRefreshAIResearch}
+                    status={engineStatus}
                   />
 
                   {/* Center Stage: View Switcher Header + (TradingView Chart | 3D Matrix) + Analytics Panel */}
@@ -226,7 +236,7 @@ export function App() {
                 </div>
               )}
 
-              {activeTab === "Futures Trading" && (
+              {activeTab === "Futures Trading" && futuresEnabled && (
                 <FuturesTradingView snapshot={snapshot} />
               )}
 
@@ -281,6 +291,7 @@ export function App() {
         onSelectTab={setActiveTab}
         killSwitchActive={snapshot?.risk.kill_switch_active ?? false}
         openPositionsCount={snapshot?.open_positions.length ?? 0}
+        futuresEnabled={futuresEnabled}
       />
     </div>
   );

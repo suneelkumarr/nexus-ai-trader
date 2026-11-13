@@ -13,7 +13,8 @@ import {
   Activity,
   Sliders,
 } from "lucide-react";
-import type { SanitizedSettingsResponse } from "../../types/system";
+import { fetchHealthStatus } from "../../services/apiClient";
+import type { HealthResponse, SanitizedSettingsResponse } from "../../types/system";
 import { formatInr } from "../../utils/format";
 
 interface SettingsViewProps {
@@ -28,6 +29,28 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
   const [compactMode, setCompactMode] = useState<boolean>(() => {
     return localStorage.getItem("nexus_compact_tables") === "true";
   });
+  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchHealthStatus()
+      .then((res) => {
+        if (!cancelled) {
+          setHealth(res);
+          setHealthError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setHealth(null);
+          setHealthError(err instanceof Error ? err.message : "Health probe failed");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("nexus_audio_alerts", String(audioAlerts));
@@ -70,6 +93,11 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
               <p className="text-xs text-slate-400">
                 Institutional runtime parameters, execution guardrails, and cryptographic safety locks.
               </p>
+              {healthError && (
+                <p className="font-mono text-[10px] text-amber-300">
+                  Health probe unavailable: {healthError}
+                </p>
+              )}
             </div>
           </div>
 
@@ -126,16 +154,30 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
               <Database className="h-4 w-4 text-cyan-400" />
               <span className="font-semibold text-white">Database Engine</span>
             </div>
-            <span className="rounded bg-emerald-950/80 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
-              CONNECTED
+            <span
+              className={`rounded px-2 py-0.5 text-[10px] font-bold border ${
+                health?.checks.database.status === "up"
+                  ? "bg-emerald-950/80 text-emerald-300 border-emerald-500/30"
+                  : health
+                    ? "bg-rose-950/80 text-rose-300 border-rose-500/30"
+                    : "bg-slate-900 text-slate-400 border-slate-700"
+              }`}
+            >
+              {health
+                ? health.checks.database.status === "up"
+                  ? "CONNECTED"
+                  : "UNAVAILABLE"
+                : "CHECKING"}
             </span>
           </div>
           <p className="text-[11px] text-slate-400">
-            Aiven PostgreSQL Cluster · Audit Ledger, Risk State, and Historical Candle Store.
+            PostgreSQL · audit ledger, risk state, and historical candle store.
           </p>
           <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800">
-            <span>Pool: Asyncpg Pool (Active)</span>
-            <span className="text-cyan-300">Latency: ~15ms</span>
+            <span>Pool: SQLAlchemy async engine</span>
+            <span className="text-cyan-300">
+              {health?.checks.database.detail ?? "Health probe: " + (health ? health.status : "pending")}
+            </span>
           </div>
         </div>
 
@@ -146,16 +188,30 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
               <Radio className="h-4 w-4 text-cyan-400" />
               <span className="font-semibold text-white">Market Feed</span>
             </div>
-            <span className="rounded bg-emerald-950/80 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
-              ONLINE
+            <span
+              className={`rounded px-2 py-0.5 text-[10px] font-bold border ${
+                health?.checks.market_feed.status === "up"
+                  ? "bg-emerald-950/80 text-emerald-300 border-emerald-500/30"
+                  : health
+                    ? "bg-rose-950/80 text-rose-300 border-rose-500/30"
+                    : "bg-slate-900 text-slate-400 border-slate-700"
+              }`}
+            >
+              {health
+                ? health.checks.market_feed.status === "up"
+                  ? "ONLINE"
+                  : "UNAVAILABLE"
+                : "CHECKING"}
             </span>
           </div>
           <p className="text-[11px] text-slate-400">
-            Public REST & WebSocket · {settings.exchange_id.toUpperCase()} Spot L1 Tickers & OHLCV.
+            Public REST & WebSocket · {settings.exchange_id.toUpperCase()} spot L1 tickers & OHLCV.
           </p>
           <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800">
-            <span>Auth: None Required</span>
-            <span className="text-cyan-300">Ping: ~42ms</span>
+            <span>Auth: public endpoints only</span>
+            <span className="text-cyan-300">
+              {health?.checks.market_feed.detail ?? "Probe pending"}
+            </span>
           </div>
         </div>
 
@@ -175,7 +231,7 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
           </p>
           <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800">
             <span>Execution Rights: 0%</span>
-            <span className="text-gold-300">Free Tier Quota</span>
+            <span className="text-gold-300">Advisory Only</span>
           </div>
         </div>
       </div>
@@ -197,7 +253,7 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
                 <span className="text-white font-semibold">Maximum Total Drawdown Limit</span>
                 <span className="block text-[10px] text-slate-400">Hard stop circuit breaker from portfolio peak</span>
               </div>
-              <span className="text-amber-300 font-bold">{String(risk.max_drawdown_pct ?? 0.08)} (8.00%)</span>
+              <span className="text-amber-300 font-bold">{Number(risk.max_drawdown_pct ?? 0).toFixed(2)}%</span>
             </div>
 
             <div className="flex items-center justify-between py-2">
@@ -205,7 +261,7 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
                 <span className="text-white font-semibold">Daily Loss Circuit Breaker</span>
                 <span className="block text-[10px] text-slate-400">Freezes new buy orders if intraday loss exceeds limit</span>
               </div>
-              <span className="text-rose-300 font-bold">{String(risk.daily_loss_limit_pct ?? 0.02)} (2.00%)</span>
+              <span className="text-rose-300 font-bold">{Number(risk.daily_loss_limit_pct ?? 0).toFixed(2)}%</span>
             </div>
 
             <div className="flex items-center justify-between py-2">
@@ -213,7 +269,7 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
                 <span className="text-white font-semibold">Max Concurrent Spot Positions</span>
                 <span className="block text-[10px] text-slate-400">Prevents capital overconcentration</span>
               </div>
-              <span className="text-cyan-300 font-bold">{String(risk.max_concurrent_positions ?? 2)} Assets</span>
+              <span className="text-cyan-300 font-bold">{String(risk.max_concurrent_positions ?? 0)} Assets</span>
             </div>
 
             <div className="flex items-center justify-between py-2">
@@ -221,31 +277,31 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
                 <span className="text-white font-semibold">Max Daily Order Entries</span>
                 <span className="block text-[10px] text-slate-400">Anti-churn transaction frequency control</span>
               </div>
-              <span className="text-cyan-300 font-bold">{String(risk.max_daily_entries ?? 5)} Orders</span>
+              <span className="text-cyan-300 font-bold">{String(risk.max_daily_entries ?? 0)} Orders</span>
             </div>
 
             <div className="flex items-center justify-between py-2">
               <div>
-                <span className="text-white font-semibold">Base Position Size Slicing</span>
-                <span className="block text-[10px] text-slate-400">Fixed fraction of total equity per clip</span>
+                <span className="text-white font-semibold">Risk Budget Per Trade</span>
+                <span className="block text-[10px] text-slate-400">Equity fraction risked between entry and stop</span>
               </div>
-              <span className="text-cyan-300 font-bold">{String(risk.position_size_pct ?? 0.10)} (10.00%)</span>
+              <span className="text-cyan-300 font-bold">{Number(risk.risk_per_trade_pct ?? 0).toFixed(2)}%</span>
             </div>
 
             <div className="flex items-center justify-between py-2">
               <div>
-                <span className="text-white font-semibold">ATR Trailing Stop Multiplier</span>
-                <span className="block text-[10px] text-slate-400">Volatility-adjusted trailing exit envelope</span>
+                <span className="text-white font-semibold">Max Position Notional</span>
+                <span className="block text-[10px] text-slate-400">Hard cap on any single position as a share of equity</span>
               </div>
-              <span className="text-cyan-300 font-bold">{String(risk.atr_stop_multiplier ?? 1.5)}x ATR</span>
+              <span className="text-cyan-300 font-bold">{Number(risk.max_position_notional_pct ?? 0).toFixed(2)}%</span>
             </div>
 
             <div className="flex items-center justify-between py-2">
               <div>
-                <span className="text-white font-semibold">Trailing Stop Activation Threshold</span>
-                <span className="block text-[10px] text-slate-400">Unrealized profit gain required to engage trailing</span>
+                <span className="text-white font-semibold">Minimum Order Notional</span>
+                <span className="block text-[10px] text-slate-400">Smallest permitted clip in virtual INR</span>
               </div>
-              <span className="text-emerald-300 font-bold">{String(risk.trailing_stop_activation_pct ?? 0.015)} (+1.50%)</span>
+              <span className="text-emerald-300 font-bold">{formatInr(Number(risk.min_order_notional_inr ?? 0))}</span>
             </div>
           </div>
         </div>
@@ -265,7 +321,7 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
                 <span className="text-white font-semibold">Fast Exponential Moving Average</span>
                 <span className="block text-[10px] text-slate-400">Short-term directional trend filter</span>
               </div>
-              <span className="text-gold-300 font-bold">{String(v1.fast_ema ?? 20)} Periods</span>
+              <span className="text-gold-300 font-bold">{String(v1.ema_fast_period ?? 0)} Periods</span>
             </div>
 
             <div className="flex items-center justify-between py-2">
@@ -273,7 +329,7 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
                 <span className="text-white font-semibold">Slow Exponential Moving Average</span>
                 <span className="block text-[10px] text-slate-400">Baseline structural trend confirmation</span>
               </div>
-              <span className="text-gold-300 font-bold">{String(v1.slow_ema ?? 50)} Periods</span>
+              <span className="text-gold-300 font-bold">{String(v1.ema_slow_period ?? 0)} Periods</span>
             </div>
 
             <div className="flex items-center justify-between py-2">
@@ -281,25 +337,24 @@ export function SettingsView({ settings, error }: SettingsViewProps) {
                 <span className="text-white font-semibold">RSI Lookback Period</span>
                 <span className="block text-[10px] text-slate-400">Relative Strength Index window</span>
               </div>
-              <span className="text-cyan-300 font-bold">{String(v1.rsi_period ?? 14)} Periods</span>
+              <span className="text-cyan-300 font-bold">{String(v1.rsi_period ?? 0)} Periods</span>
             </div>
 
             <div className="flex items-center justify-between py-2">
               <div>
                 <span className="text-white font-semibold">RSI Oversold / Overbought Bounds</span>
                 <span className="block text-[10px] text-slate-400">Pullback entry threshold and exhaustion ceiling</span>
-              </div>
-              <span className="text-emerald-300 font-bold">
-                {String(v1.rsi_oversold ?? 30)} / {String(v1.rsi_overbought ?? 70)}
+              </div>                <span className="text-emerald-300 font-bold">
+                {String(v1.rsi_entry_min ?? 0)} / {String(v1.rsi_entry_max ?? 0)}
               </span>
             </div>
 
             <div className="flex items-center justify-between py-2">
               <div>
-                <span className="text-white font-semibold">Volume Surge Multiplier</span>
-                <span className="block text-[10px] text-slate-400">Required volume vs 20-period moving average</span>
+                <span className="text-white font-semibold">Volume SMA Period</span>
+                <span className="block text-[10px] text-slate-400">Baseline window for volume confirmation</span>
               </div>
-              <span className="text-cyan-300 font-bold">{String(v1.volume_surge_ratio ?? 1.5)}x MA</span>
+              <span className="text-cyan-300 font-bold">{String(v1.volume_sma_period ?? 0)} Bars</span>
             </div>
 
             <div className="flex items-center justify-between py-2">

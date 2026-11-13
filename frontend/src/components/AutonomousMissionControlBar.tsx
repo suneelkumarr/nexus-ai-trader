@@ -75,7 +75,7 @@ export function AutonomousMissionControlBar({
               </span>
             </div>
             <div className="font-mono text-[11px] text-slate-400 mt-0.5">
-              EMA Trend V1 + BB Oversold V2 + Arbitrage Hunter across 54 live pairs
+              Multi-Asset Scanner · 110+ Binance Spot & Futures Markets · Spot Buy & Futures Long/Short Dual Execution
             </div>
           </div>
         </div>
@@ -105,6 +105,13 @@ export function AutonomousMissionControlBar({
             <span className="text-slate-400 text-[11px]">Strategy Fills:</span>
             <span className="font-bold text-emerald-300 tabular-nums">
               {status?.strategy_trades_count ?? 0}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 shadow-inner">
+            <span className="text-cyan-400 text-[11px]">Universe:</span>
+            <span className="font-bold text-cyan-300 tabular-nums">
+              {status?.universe_size ?? 110}+ Pairs
             </span>
           </div>
         </div>

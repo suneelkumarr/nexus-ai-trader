@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from nexus.application.futures.broker import FuturesPaperBroker
 from nexus.application.futures.funding_service import FuturesFundingService
 from nexus.core.logging import get_logger
+from nexus.core.security import require_admin_auth
 from nexus.domain.futures import (
     FuturesAccountSummary,
     FuturesOrderRequest,
@@ -73,6 +74,7 @@ async def get_futures_positions(
 async def place_futures_order(
     request: FuturesOrderRequest,
     broker: Annotated[FuturesPaperBroker, Depends(get_futures_broker)],
+    _auth: Annotated[str, Depends(require_admin_auth)] = "ok",
 ) -> FuturesOrderResult:
     """Place a simulated futures order (OPEN_LONG, OPEN_SHORT, CLOSE_LONG, CLOSE_SHORT)."""
     return await broker.submit_order(request)
@@ -82,6 +84,7 @@ async def place_futures_order(
 async def close_futures_position(
     position_id: UUID,
     broker: Annotated[FuturesPaperBroker, Depends(get_futures_broker)],
+    _auth: Annotated[str, Depends(require_admin_auth)] = "ok",
 ) -> FuturesPosition:
     """Close an open simulated futures position at market price."""
     try:
@@ -118,6 +121,7 @@ async def get_funding_rates(
 async def toggle_auto_trade(
     req: ToggleAutoTradeRequest,
     broker: Annotated[FuturesPaperBroker, Depends(get_futures_broker)],
+    _auth: Annotated[str, Depends(require_admin_auth)] = "ok",
 ) -> dict[str, Any]:
     """Enable or disable autonomous strategy execution on futures."""
     broker.set_auto_trade(req.enabled)

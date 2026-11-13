@@ -257,6 +257,7 @@ export interface SanitizedSettingsResponse {
   allow_leverage: boolean;
   allow_futures: boolean;
   allow_withdrawals: boolean;
+  paper_futures_enabled: boolean;
   initial_capital_inr: number;
   base_currency: string;
   allowed_symbols: string[];
@@ -310,6 +311,15 @@ export interface AIResearchBriefing {
   updated_at: string;
 }
 
+export interface MarketOpportunityItem {
+  symbol: string;
+  score: number;
+  type: string;
+  change_24h_pct: number;
+  last_price: number;
+  sector: string;
+}
+
 export interface AutonomousEngineStatus {
   is_running: boolean;
   cycle_count: number;
@@ -324,6 +334,10 @@ export interface AutonomousEngineStatus {
   initial_capital_inr: number;
   last_error: string | null;
   latest_ai_research: AIResearchBriefing;
+  universe_size?: number;
+  recently_evaluated_symbols?: string[];
+  recent_opportunities?: MarketOpportunityItem[];
+  recent_orders_placed?: string[];
 }
 
 export interface CandleBarDto {

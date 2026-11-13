@@ -27,6 +27,10 @@ class EngineStatusResponse(BaseModel):
     initial_capital_inr: float
     last_error: str | None
     latest_ai_research: dict[str, Any]
+    universe_size: int = 115
+    recently_evaluated_symbols: list[str] = []
+    recent_opportunities: list[dict[str, Any]] = []
+    recent_orders_placed: list[str] = []
 
 
 def get_autonomous_engine(request: Request) -> AutonomousEngineService:

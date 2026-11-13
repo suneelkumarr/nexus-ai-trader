@@ -20,6 +20,8 @@ htmlcov/
 .env
 .env.local
 .env.*.local
+frontend/.env.production
+frontend/.env.production.local
 *.pem
 *.key
 

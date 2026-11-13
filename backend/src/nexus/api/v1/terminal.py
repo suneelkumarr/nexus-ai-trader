@@ -11,6 +11,7 @@ from fastapi import (
     Depends,
     HTTPException,
     Query,
+    Request,
     WebSocket,
     WebSocketDisconnect,
     status,
@@ -236,6 +237,7 @@ class SanitizedSettingsResponse(BaseModel):
     allow_leverage: bool
     allow_futures: bool
     allow_withdrawals: bool
+    paper_futures_enabled: bool
     initial_capital_inr: float
     base_currency: str
     allowed_symbols: list[str]
@@ -459,6 +461,7 @@ async def get_terminal_snapshot(
 )
 async def trigger_emergency_stop(
     payload: EmergencyStopRequest,
+    request: Request,
     settings: Annotated[Settings, Depends(get_app_settings)],
     paper_repo: Annotated[PaperLedgerRepository, Depends(get_paper_ledger_repository)],
     broker: Annotated[PersistentPaperBroker, Depends(get_persistent_paper_broker)],
@@ -476,6 +479,16 @@ async def trigger_emergency_stop(
         now_utc=now_utc,
     )
     rejected = sum(1 for r in results if r.status == "rejected")
+
+    futures_broker = getattr(request.app.state, "futures_broker", None)
+    if futures_broker is not None and payload.flatten_positions:
+        futures_closed = await futures_broker.close_all_positions(
+            reason=f"Emergency kill switch: {payload.reason}"
+        )
+        logger.warning(
+            "emergency_kill_switch_futures_flattened",
+            flattened_futures_count=futures_closed,
+        )
     return EmergencyStopResponse(
         kill_switch_active=True,
         reason=payload.reason,
@@ -631,8 +644,6 @@ async def get_candles_series(
     limit: Annotated[int, Query(ge=10, le=1000)] = 250,
 ) -> CandleSeriesResponse:
     """Return chronological OHLCV candle bars formatted for lightweight-charts."""
-    import math
-
     from nexus.application.market_data.service import MarketDataService
 
     norm_sym = symbol.strip().upper()
@@ -666,6 +677,8 @@ async def get_candles_series(
             pass
 
     if not bars:
+        import math
+
         sec = get_timeframe_seconds(norm_tf)
         now_ts = int(datetime.now(UTC).timestamp())
         benchmarks = {
@@ -867,6 +880,7 @@ async def get_terminal_settings(
         allow_leverage=settings.allow_leverage,
         allow_futures=settings.allow_futures,
         allow_withdrawals=settings.allow_withdrawals,
+        paper_futures_enabled=settings.paper_futures_enabled,
         initial_capital_inr=float(settings.initial_capital_inr),
         base_currency=settings.base_currency,
         allowed_symbols=settings.allowed_symbols,

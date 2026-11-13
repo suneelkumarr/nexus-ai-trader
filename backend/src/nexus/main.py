@@ -43,9 +43,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         db_manager = DatabaseManager(active_settings)
         candle_repo = SqlAlchemyCandleRepository(db_manager.session_factory)
+        from nexus.application.market_data.multi_market_scanner import SECTOR_MAPPING
+
+        active_universe = list(
+            dict.fromkeys(list(active_settings.allowed_symbols) + list(SECTOR_MAPPING.keys()))
+        )
+
         exchange_client = CCXTPublicExchangeClient(
             exchange_id=active_settings.exchange_id,
-            allowed_symbols=active_settings.allowed_symbols,
+            allowed_symbols=active_universe,
             supported_timeframes=active_settings.supported_timeframes,
             timeout_ms=active_settings.exchange_timeout_ms,
             max_retries=active_settings.market_data_max_retries,
@@ -88,22 +94,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await conn.run_sync(Base.metadata.create_all)
 
         funding_service = FuturesFundingService()
-        futures_repo = SqlAlchemyFuturesRepository(db_manager.session_factory)
-        futures_broker = FuturesPaperBroker(
-            repository=futures_repo,
-            market_data=market_data_service,
-            funding_service=funding_service,
-        )
+        futures_broker: FuturesPaperBroker | None = None
+        if active_settings.paper_futures_enabled:
+            futures_repo = SqlAlchemyFuturesRepository(db_manager.session_factory)
+            futures_broker = FuturesPaperBroker(
+                repository=futures_repo,
+                market_data=market_data_service,
+                funding_service=funding_service,
+                paper_repo=paper_repo,
+            )
 
         signal_approver = SpotSignalRiskApprover(
-            allowed_symbols=active_settings.allowed_symbols
+            allowed_symbols=active_universe
         )
         strategy_engine = NexusStrategyV1(
             config=active_settings.strategy_v1,
             risk_approver=signal_approver,
         )
         risk_manager = IndependentRiskManager(
-            allowed_symbols=active_settings.allowed_symbols,
+            allowed_symbols=active_universe,
             risk_config=active_settings.risk,
             fee_bps=active_settings.paper_fee_bps,
             slippage_bps=active_settings.paper_slippage_bps,
@@ -153,7 +162,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allowed_symbols=active_settings.allowed_symbols,
             supported_timeframes=active_settings.supported_timeframes,
             autonomous_engine="active",
-            futures_paper_engine="active",
+            paper_futures_enabled=active_settings.paper_futures_enabled,
         )
 
         try:
@@ -180,12 +189,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         SecurityRateLimitMiddleware,
         rate_limit_per_minute=active_settings.rate_limit_per_minute,
         max_body_bytes=active_settings.max_body_bytes,
+        trust_proxy_headers=active_settings.trust_proxy_headers,
     )
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=active_settings.cors_origins,
-        allow_origin_regex=r"^https?://.*(?:\.pages\.dev|localhost|\.onrender\.com|\.koyeb\.app)(?::\d+)?$",
+        allow_origin_regex=active_settings.cors_origin_regex or None,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=[

@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"]
     )
+    # Narrow by default; set to an empty string to disable regex matching entirely.
+    cors_origin_regex: str = r"^https://nexus-ai-trader[a-z0-9-]*\.onrender\.com$"
+    trust_proxy_headers: bool = False
     api_auth_token: SecretStr = Field(default=SecretStr(""))
     rate_limit_per_minute: int = Field(default=120, ge=10, le=10000)
     max_body_bytes: int = Field(default=2 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024)
@@ -90,6 +93,9 @@ class Settings(BaseSettings):
     allow_leverage: bool = False
     allow_futures: bool = False
     allow_withdrawals: bool = False
+    # Isolated-margin futures SIMULATION is paper-only and never routes orders to
+    # an exchange. Live futures remain forbidden by `allow_futures` above.
+    paper_futures_enabled: bool = True
 
     # --- Virtual Portfolio & Asset Universe ---
     initial_capital_inr: Decimal = Field(default=Decimal("10000.00"))

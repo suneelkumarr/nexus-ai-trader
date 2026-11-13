@@ -115,15 +115,14 @@ def test_arbitrage_detector_synthetic_dislocation(
     assert eth_btc_disloc.direction == "BUY_SYNTH_SELL_DIRECT"
 
 
-def test_arbitrage_detector_telemetry_fields(sample_tickers: dict[str, MarketTickerItem]) -> None:
+def test_arbitrage_detector_reports_real_scan_metrics(
+    sample_tickers: dict[str, MarketTickerItem],
+) -> None:
     detector = ArbitrageDetector()
     result = detector.evaluate(sample_tickers)
 
-    telemetry = result.telemetry
-    assert len(telemetry.load_90s) == 24
-    assert telemetry.cypher_queries_per_sec > 0
-    assert telemetry.hacks_blocked_per_sec > 0
-    assert telemetry.nodes_count == len(sample_tickers)
-    assert telemetry.system_buffer_verified_pct == 99.8
-    assert telemetry.fps == 60.0
+    assert result.total_markets == len(sample_tickers)
+    assert result.active_markets == len(sample_tickers)
+    assert result.avg_spread_bps >= Decimal("0")
+    assert all(t.symbol in sample_tickers for t in result.markets)
 

@@ -13,7 +13,7 @@ from nexus.domain.arbitrage import MarketSector, MarketTickerItem
 
 logger = get_logger(__name__)
 
-# Curated 54 Binance spot markets grouped by quantitative sector
+# Curated 115+ Binance spot & futures markets grouped by quantitative sector
 SECTOR_MAPPING: dict[str, MarketSector] = {
     # Layer 1 & Major
     "BTC/USDT": "LAYER_1",
@@ -31,6 +31,19 @@ SECTOR_MAPPING: dict[str, MarketSector] = {
     "ALGO/USDT": "LAYER_1",
     "FTM/USDT": "LAYER_1",
     "ETC/USDT": "LAYER_1",
+    "TON/USDT": "LAYER_1",
+    "KAVA/USDT": "LAYER_1",
+    "EOS/USDT": "LAYER_1",
+    "FLOW/USDT": "LAYER_1",
+    "EGLD/USDT": "LAYER_1",
+    "ROSE/USDT": "LAYER_1",
+    "CFX/USDT": "LAYER_1",
+    "ZEC/USDT": "LAYER_1",
+    "DASH/USDT": "LAYER_1",
+    "NEO/USDT": "LAYER_1",
+    "IOTA/USDT": "LAYER_1",
+    "VET/USDT": "LAYER_1",
+    "HBAR/USDT": "LAYER_1",
     # DeFi
     "LINK/USDT": "DEFI",
     "UNI/USDT": "DEFI",
@@ -43,6 +56,17 @@ SECTOR_MAPPING: dict[str, MarketSector] = {
     "ONDO/USDT": "DEFI",
     "INJ/USDT": "DEFI",
     "RUNE/USDT": "DEFI",
+    "SNX/USDT": "DEFI",
+    "DYDX/USDT": "DEFI",
+    "COMP/USDT": "DEFI",
+    "1INCH/USDT": "DEFI",
+    "SUSHI/USDT": "DEFI",
+    "CAKE/USDT": "DEFI",
+    "ENA/USDT": "DEFI",
+    "ETHFI/USDT": "DEFI",
+    "GMX/USDT": "DEFI",
+    "PYTH/USDT": "DEFI",
+    "JTO/USDT": "DEFI",
     # AI & Decentralized Compute
     "FET/USDT": "AI_COMPUTE",
     "RENDER/USDT": "AI_COMPUTE",
@@ -51,6 +75,12 @@ SECTOR_MAPPING: dict[str, MarketSector] = {
     "THETA/USDT": "AI_COMPUTE",
     "FIL/USDT": "AI_COMPUTE",
     "TIA/USDT": "AI_COMPUTE",
+    "WLD/USDT": "AI_COMPUTE",
+    "AR/USDT": "AI_COMPUTE",
+    "GRT/USDT": "AI_COMPUTE",
+    "IO/USDT": "AI_COMPUTE",
+    "VIRTUAL/USDT": "AI_COMPUTE",
+    "AIXBT/USDT": "AI_COMPUTE",
     # High-Velocity Memes
     "DOGE/USDT": "MEMES",
     "SHIB/USDT": "MEMES",
@@ -58,6 +88,15 @@ SECTOR_MAPPING: dict[str, MarketSector] = {
     "WIF/USDT": "MEMES",
     "BONK/USDT": "MEMES",
     "FLOKI/USDT": "MEMES",
+    "BOME/USDT": "MEMES",
+    "MEME/USDT": "MEMES",
+    "NOT/USDT": "MEMES",
+    "NEIRO/USDT": "MEMES",
+    "1000SATS/USDT": "MEMES",
+    "TURBO/USDT": "MEMES",
+    "PNUT/USDT": "MEMES",
+    "ACT/USDT": "MEMES",
+    "PENGU/USDT": "MEMES",
     # Infrastructure, Scaling & Payments
     "XRP/USDT": "INFRASTRUCTURE",
     "LTC/USDT": "INFRASTRUCTURE",
@@ -66,11 +105,31 @@ SECTOR_MAPPING: dict[str, MarketSector] = {
     "ARB/USDT": "INFRASTRUCTURE",
     "OP/USDT": "INFRASTRUCTURE",
     "STX/USDT": "INFRASTRUCTURE",
+    "POL/USDT": "INFRASTRUCTURE",
+    "IMX/USDT": "INFRASTRUCTURE",
+    "MANTA/USDT": "INFRASTRUCTURE",
+    "STRK/USDT": "INFRASTRUCTURE",
+    "ZK/USDT": "INFRASTRUCTURE",
+    "BLUR/USDT": "INFRASTRUCTURE",
+    "ENS/USDT": "INFRASTRUCTURE",
+    "DYM/USDT": "INFRASTRUCTURE",
+    "MOVE/USDT": "INFRASTRUCTURE",
+    "ME/USDT": "INFRASTRUCTURE",
+    "XLM/USDT": "INFRASTRUCTURE",
     # Gaming & Metaverse
     "GALA/USDT": "GAMING_METAVERSE",
     "SAND/USDT": "GAMING_METAVERSE",
     "MANA/USDT": "GAMING_METAVERSE",
     "AXS/USDT": "GAMING_METAVERSE",
+    "BEAM/USDT": "GAMING_METAVERSE",
+    "PIXEL/USDT": "GAMING_METAVERSE",
+    "RONIN/USDT": "GAMING_METAVERSE",
+    "YGG/USDT": "GAMING_METAVERSE",
+    "ILV/USDT": "GAMING_METAVERSE",
+    "ENJ/USDT": "GAMING_METAVERSE",
+    "CHZ/USDT": "GAMING_METAVERSE",
+    "APE/USDT": "GAMING_METAVERSE",
+    "GMT/USDT": "GAMING_METAVERSE",
     # Major Arbitrage Cross Pairs
     "ETH/BTC": "LAYER_1",
     "SOL/BTC": "LAYER_1",
@@ -158,7 +217,7 @@ class MultiMarketScanner:
         return dict(res)
 
     async def scan_markets(self, force_refresh: bool = False) -> dict[str, MarketTickerItem]:
-        """Fetch quotes for all 54 symbols using batch CCXT query."""
+        """Fetch quotes for all symbols using batch CCXT query."""
         now = time.monotonic()
         if now < self._banned_until_monotonic:
             if self._cached_tickers:

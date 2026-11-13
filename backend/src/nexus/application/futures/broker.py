@@ -20,7 +20,7 @@ from nexus.domain.futures import (
     FuturesPositionStatus,
     FuturesSide,
 )
-from nexus.domain.interfaces import MarketDataProvider
+from nexus.domain.interfaces import MarketDataProvider, PaperLedgerRepository
 from nexus.infrastructure.db.futures_repository import SqlAlchemyFuturesRepository
 from nexus.infrastructure.db.models import (
     PaperFuturesOrderORM,
@@ -39,16 +39,27 @@ class FuturesPaperBroker:
         repository: SqlAlchemyFuturesRepository,
         market_data: MarketDataProvider,
         funding_service: FuturesFundingService | None = None,
+        paper_repo: PaperLedgerRepository | None = None,
         slippage_bps: Decimal = Decimal("5.0"),
         fee_rate: Decimal = Decimal("0.0004"),
     ) -> None:
         self._repo = repository
         self._market_data = market_data
         self._funding = funding_service or FuturesFundingService()
+        self._paper_repo = paper_repo
         self._slippage_bps = slippage_bps
         self._fee_rate = fee_rate
         self._calc = FuturesRiskCalculator()
         self._auto_trade_enabled = False
+
+    async def _kill_switch_reason(self, portfolio_id: UUID) -> str | None:
+        """Return the active kill-switch reason, if the shared risk state is halted."""
+        if self._paper_repo is None:
+            return None
+        risk_state = await self._paper_repo.get_or_create_risk_state(portfolio_id)
+        if not risk_state.kill_switch_active:
+            return None
+        return risk_state.kill_switch_reason or "Emergency kill switch active"
 
     @property
     def auto_trade_enabled(self) -> bool:
@@ -84,6 +95,20 @@ class FuturesPaperBroker:
         """Process a simulated futures order (OPEN_LONG, OPEN_SHORT, etc.)."""
         portfolio = await self._repo.get_or_create_portfolio()
         now = datetime.now(UTC)
+
+        halt_reason = await self._kill_switch_reason(portfolio.id)
+        if halt_reason is not None and request.action in (
+            FuturesOrderAction.OPEN_LONG,
+            FuturesOrderAction.OPEN_SHORT,
+        ):
+            return FuturesOrderResult(
+                portfolio_id=portfolio.id,
+                symbol=request.symbol,
+                action=request.action,
+                status=FuturesOrderStatus.REJECTED,
+                quantity=request.quantity,
+                rejection_reason=f"Futures entries halted: {halt_reason}",
+            )
 
         try:
             ticker = await self._market_data.fetch_ticker(request.symbol)
@@ -403,6 +428,23 @@ class FuturesPaperBroker:
                 )
             )
         return results
+
+    async def close_all_positions(self, reason: str = "Emergency kill switch") -> int:
+        """Flatten every open simulated futures position at market."""
+        portfolio = await self._repo.get_or_create_portfolio()
+        open_rows = await self._repo.get_open_positions(portfolio.id)
+        closed = 0
+        for row in open_rows:
+            try:
+                await self.close_position_by_id(row.id, reason=reason)
+                closed += 1
+            except Exception as exc:
+                logger.warning(
+                    "futures_kill_switch_close_failed",
+                    position_id=str(row.id),
+                    error=str(exc),
+                )
+        return closed
 
     async def close_position_by_id(
         self, position_id: UUID, reason: str = "User closed position"

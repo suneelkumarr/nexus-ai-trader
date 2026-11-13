@@ -17,6 +17,7 @@ from nexus.application.risk_manager import IndependentRiskManager
 from nexus.application.strategy.v1_engine import NexusStrategyV1
 from nexus.core.config import Settings
 from nexus.core.logging import get_logger
+from nexus.domain.futures import FuturesOrderAction, FuturesOrderRequest
 from nexus.domain.interfaces import (
     AIAnalysisClient,
     CandleRepository,
@@ -96,15 +97,20 @@ class AutonomousEngineService:
         self._arbitrage_trades_count = 0
         self._strategy_trades_count = 0
         self._last_error: str | None = None
+        self._universe_queue_index = 0
+        self._recent_evaluated: list[str] = []
+        self._recent_opportunities: list[dict[str, Any]] = []
+        self._recent_orders: list[str] = []
 
         # Latest cached intelligence
         self._latest_ai_research: dict[str, Any] = {
-            "macro_regime": "VOLATILE_CHOP",
-            "sentiment_index": 50,
-            "sentiment_label": "Neutral",
-            "top_momentum_sector": "Layer 1",
+            "macro_regime": "AWAITING_FIRST_SCAN",
+            "sentiment_index": 0,
+            "sentiment_label": "Unavailable",
+            "top_momentum_sector": "Unavailable",
             "executive_briefing": (
-                "Engine initialized. Autonomous multi-agent pipeline monitoring 54 spot markets."
+                "Awaiting the first verified market scan. No research metrics are "
+                "reported until real exchange telemetry is available."
             ),
             "risk_advisory": (
                 "Standard paper risk controls active. Position sizing governed by RiskManager."
@@ -208,6 +214,10 @@ class AutonomousEngineService:
             "initial_capital_inr": float(portfolio.initial_capital_inr),
             "last_error": self._last_error,
             "latest_ai_research": self._latest_ai_research,
+            "universe_size": len(getattr(self._scanner, "_symbols", [])) or 115,
+            "recently_evaluated_symbols": self._recent_evaluated[-15:],
+            "recent_opportunities": self._recent_opportunities[:8],
+            "recent_orders_placed": self._recent_orders[-10:],
         }
 
     # -------------------------------------------------------------------------
@@ -265,24 +275,66 @@ class AutonomousEngineService:
             for pos in open_positions
         }
 
-        # Dynamic priority watchlist: Core anchors + Top Volume Leaders + AI Alpha Picks
-        core_symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+        # Comprehensive Binance Spot & Futures Universe Opportunity Engine
         tickers_map = await self._scanner.scan_markets()
-        top_volume = [
-            t.symbol
-            for t in sorted(tickers_map.values(), key=lambda x: x.quote_volume_24h, reverse=True)
-            if t.symbol.endswith("/USDT") and t.symbol in self._settings.allowed_symbols
-        ][:5]
-        ai_picks = [
-            p["symbol"]
-            for p in self._latest_ai_research.get("top_alpha_picks", [])
-            if (
-                isinstance(p, dict)
-                and "symbol" in p
-                and p["symbol"] in self._settings.allowed_symbols
+        from nexus.application.market_data.multi_market_scanner import SECTOR_MAPPING
+
+        # Build active Binance universe (all monitored spot & futures pairs)
+        binance_universe = list(
+            dict.fromkeys(
+                [s for s in tickers_map.keys() if s.endswith("/USDT")]
+                + [s for s in SECTOR_MAPPING.keys() if s.endswith("/USDT")]
+                + list(self._settings.allowed_symbols)
             )
+        )
+
+        # Rank all Binance coins by Opportunity Potential
+        scored_candidates: list[tuple[str, float, str]] = []
+        for sym in binance_universe:
+            ticker = tickers_map.get(sym)
+            if not ticker:
+                continue
+            chg = float(ticker.change_24h_pct)
+            vol = float(ticker.quote_volume_24h)
+            spread = float(ticker.spread_bps)
+            opp_score = abs(chg) * 2.5 + (min(vol, 200_000_000.0) / 10_000_000.0) - min(spread * 0.1, 5.0)
+            opp_type = "BREAKOUT" if chg >= 2.5 else ("DIP_REVERSAL" if chg <= -3.0 else "MOMENTUM")
+            scored_candidates.append((sym, opp_score, opp_type))
+
+        scored_candidates.sort(key=lambda x: x[1], reverse=True)
+
+        self._recent_opportunities = [
+            {
+                "symbol": sym,
+                "score": round(score, 1),
+                "type": opp_t,
+                "change_24h_pct": float(tickers_map[sym].change_24h_pct) if sym in tickers_map else 0.0,
+                "last_price": float(tickers_map[sym].last) if sym in tickers_map else 0.0,
+                "sector": SECTOR_MAPPING.get(sym, "LAYER_1"),
+            }
+            for sym, score, opp_t in scored_candidates[:15]
         ]
-        watchlist = list(dict.fromkeys(core_symbols + top_volume + ai_picks))
+
+        # 1. Core anchors (always evaluated)
+        core_symbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+        # 2. Currently open positions (always evaluated for trailing stops / exits)
+        active_positions_symbols = list(pos_by_symbol.keys())
+        # 3. Top Opportunity Leaders (top 8 hot momentum/breakout candidates)
+        top_opportunity_symbols = [s for s, _, _ in scored_candidates if s not in core_symbols][:8]
+        # 4. Rotating slice across entire 115+ coin universe (10 coins per cycle round-robin)
+        if binance_universe:
+            slice_size = 10
+            start_idx = self._universe_queue_index % len(binance_universe)
+            end_idx = start_idx + slice_size
+            rotating_slice = binance_universe[start_idx:end_idx]
+            if end_idx > len(binance_universe):
+                rotating_slice += binance_universe[: end_idx % len(binance_universe)]
+            self._universe_queue_index = (self._universe_queue_index + slice_size) % len(binance_universe)
+        else:
+            rotating_slice = []
+
+        # Combine into complete cycle watchlist
+        watchlist = list(dict.fromkeys(core_symbols + active_positions_symbols + top_opportunity_symbols + rotating_slice))
 
         ai_macro = self._latest_ai_research.get("macro_regime", "VOLATILE_CHOP")
         ai_sentiment = self._latest_ai_research.get("sentiment_index", 50)
@@ -293,8 +345,8 @@ class AutonomousEngineService:
         timeframe = self._settings.default_timeframe
 
         for symbol in watchlist:
-            # In market liquidations, restrict entries to core anchors or AI high conviction
-            if is_bearish_regime and symbol not in core_symbols and symbol not in ai_picks:
+            # In severe market liquidations, restrict new spot long entries to core anchors
+            if is_bearish_regime and symbol not in core_symbols and symbol not in active_positions_symbols:
                 continue
 
             try:
@@ -349,15 +401,82 @@ class AutonomousEngineService:
                     )
                     continue
 
+                # 1. Spot Order Execution (Buy/Sell)
                 try:
                     order = await self._broker.execute_strategy_signal(
                         portfolio.id, eval_result.signal, now_utc=now_utc
                     )
                     if order.status.value == "filled":
                         self._strategy_trades_count += 1
-                        orders_placed.append(f"{order.side.value.upper()} {symbol}")
+                        desc = f"SPOT {order.side.value.upper()} {symbol}"
+                        orders_placed.append(desc)
+                        self._recent_orders.append(f"{desc} @ {order.executed_price_usdt}")
                 except Exception as exc:
                     logger.warning("autonomous_order_exec_failed", symbol=symbol, error=str(exc))
+
+                # 2. Futures Order Execution (Simulated USDT-M Perpetuals)
+                if self._futures_broker is not None:
+                    try:
+                        fut_positions = await self._futures_broker.get_open_positions()
+                        has_fut_pos = any(
+                            p.symbol == symbol and getattr(p.status, "value", p.status) == "open"
+                            for p in fut_positions
+                        )
+                        if not has_fut_pos:
+                            sig_dir = getattr(
+                                eval_result.signal.direction, "value", eval_result.signal.direction
+                            ).upper()
+                            action = (
+                                FuturesOrderAction.OPEN_LONG
+                                if sig_dir == "BUY"
+                                else FuturesOrderAction.OPEN_SHORT
+                            )
+                            last_p = Decimal(str(bars[-1].close))
+                            if last_p > Decimal("0"):
+                                notional_usd = Decimal("100.0")
+                                qty = (notional_usd / last_p).quantize(Decimal("0.0001"))
+                                if qty > Decimal("0"):
+                                    sl_price = (
+                                        (last_p * Decimal("0.97")).quantize(Decimal("0.0001"))
+                                        if action == FuturesOrderAction.OPEN_LONG
+                                        else (last_p * Decimal("1.03")).quantize(Decimal("0.0001"))
+                                    )
+                                    tp_price = (
+                                        (last_p * Decimal("1.06")).quantize(Decimal("0.0001"))
+                                        if action == FuturesOrderAction.OPEN_LONG
+                                        else (last_p * Decimal("0.94")).quantize(Decimal("0.0001"))
+                                    )
+                                    fut_order = await self._futures_broker.submit_order(
+                                        FuturesOrderRequest(
+                                            symbol=symbol,
+                                            action=action,
+                                            quantity=qty,
+                                            leverage=2,
+                                            stop_loss_price=sl_price,
+                                            take_profit_price=tp_price,
+                                        )
+                                    )
+                                    if getattr(fut_order.status, "value", fut_order.status) == "filled":
+                                        self._strategy_trades_count += 1
+                                        desc = f"FUTURES {action.value} {symbol}"
+                                        orders_placed.append(desc)
+                                        self._recent_orders.append(
+                                            f"{desc} @ {fut_order.executed_price}"
+                                        )
+                                        logger.info(
+                                            "autonomous_futures_order_filled",
+                                            symbol=symbol,
+                                            action=action.value,
+                                            qty=str(qty),
+                                            price=str(fut_order.executed_price),
+                                        )
+                    except Exception as f_err:
+                        logger.debug(
+                            "autonomous_futures_auto_exec_error", symbol=symbol, error=str(f_err)
+                        )
+
+        self._recent_evaluated = evaluated
+        self._recent_orders = self._recent_orders[-25:]
 
         return {
             "status": "OK",
@@ -416,7 +535,13 @@ class AutonomousEngineService:
             return {"status": "HALTED", "reason": "Kill switch active"}
 
         allocated_usdt = Decimal("50.0")
-        inr_per_usdt = Decimal("84.50")
+        try:
+            inr_per_usdt = await self._market_data.fetch_inr_per_usdt()
+        except Exception as exc:
+            logger.warning("arbitrage_fx_unavailable", error=str(exc))
+            return {"status": "FX_UNAVAILABLE"}
+        if inr_per_usdt <= Decimal("0"):
+            return {"status": "FX_UNAVAILABLE"}
         now_utc = datetime.now(UTC)
 
         if executable_arbs:

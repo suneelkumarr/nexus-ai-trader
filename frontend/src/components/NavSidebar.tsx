@@ -16,6 +16,7 @@ interface NavSidebarProps {
   onSelectTab: (tab: NavTab) => void;
   killSwitchActive: boolean;
   openPositionsCount: number;
+  futuresEnabled: boolean;
 }
 
 const NAV_ITEMS: Array<{
@@ -81,7 +82,12 @@ export function NavSidebar({
   onSelectTab,
   killSwitchActive,
   openPositionsCount,
+  futuresEnabled,
 }: NavSidebarProps) {
+  const visibleItems = NAV_ITEMS.filter(
+    (item) => item.id !== "Futures Trading" || futuresEnabled,
+  );
+
   return (
     <aside className="flex shrink-0 flex-row gap-1.5 overflow-x-auto border-b border-white/[0.08] bg-[#050a17]/95 p-2 sm:p-3 lg:w-60 lg:flex-col lg:border-b-0 lg:border-r lg:p-3.5 backdrop-blur-2xl shadow-2xl">
       <div className="hidden pb-3 px-2 lg:block">
@@ -94,7 +100,7 @@ export function NavSidebar({
       </div>
 
       <nav className="flex flex-row gap-1 lg:flex-col">
-        {NAV_ITEMS.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon;
           const active = activeTab === item.id;
           const isFutures = item.id === "Futures Trading";

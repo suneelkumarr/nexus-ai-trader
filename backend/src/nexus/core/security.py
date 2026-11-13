@@ -91,11 +91,24 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
         *,
         rate_limit_per_minute: int = 120,
         max_body_bytes: int = 2 * 1024 * 1024,
+        trust_proxy_headers: bool = False,
     ) -> None:
         super().__init__(app)  # type: ignore[arg-type]
         self._rate_limit = rate_limit_per_minute
         self._max_body_bytes = max_body_bytes
+        self._trust_proxy_headers = trust_proxy_headers
         self._ip_history: dict[str, list[float]] = defaultdict(list)
+
+    def _client_ip(self, request: Request) -> str:
+        """Resolve client IP, optionally honoring a trusted proxy's X-Forwarded-For."""
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        if self._trust_proxy_headers:
+            forwarded = request.headers.get("x-forwarded-for")
+            if forwarded:
+                candidate = forwarded.split(",")[0].strip()
+                if candidate:
+                    return candidate
+        return client_ip
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # Check payload size
@@ -115,12 +128,18 @@ class SecurityRateLimitMiddleware(BaseHTTPMiddleware):
         if request.scope.get("type") == "websocket" or request.url.path.startswith("/api/v1/ws/"):
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "127.0.0.1"
+        client_ip = self._client_ip(request)
         now = time.time()
         window_start = now - 60.0
 
-        # Purge timestamps older than 60s
-        timestamps = [t for t in self._ip_history[client_ip] if t > window_start]
+        # Purge timestamps older than 60s and drop idle buckets to bound memory.
+        timestamps = [t for t in self._ip_history.get(client_ip, []) if t > window_start]
+        if not timestamps and client_ip in self._ip_history:
+            self._ip_history.pop(client_ip, None)
+        if len(self._ip_history) > 10_000:
+            for ip in [ip for ip, hist in self._ip_history.items() if not hist]:
+                self._ip_history.pop(ip, None)
+
         if len(timestamps) >= self._rate_limit:
             return Response(
                 content='{"detail":"Rate limit exceeded (429 Too Many Requests)."}',

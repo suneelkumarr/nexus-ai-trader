@@ -58,25 +58,6 @@ export interface SyntheticDislocation {
   detected_at: string;
 }
 
-export interface ScannerTelemetry {
-  load_90s: number[];
-  cypher_queries_per_sec: number;
-  hacks_blocked_per_sec: number;
-  yaw_deg: number;
-  pitch_deg: number;
-  graph_r_min: number;
-  graph_r_max: number;
-  nodes_count: number;
-  edges_count: number;
-  sota_gain_pct: number;
-  fps: number;
-  system_buffer_verified_pct: number;
-  scanner_compute_split_pct: number;
-  ai_compute_split_pct: number;
-  active_pods_count: number;
-  total_pods_count: number;
-}
-
 export interface MultiMarketScanResponse {
   timestamp: string;
   total_markets: number;
@@ -87,7 +68,6 @@ export interface MultiMarketScanResponse {
   markets: MarketTickerItem[];
   triangular_opportunities: TriangularOpportunity[];
   synthetic_dislocations: SyntheticDislocation[];
-  telemetry: ScannerTelemetry;
 }
 
 export interface ExecutePaperArbResponse {
