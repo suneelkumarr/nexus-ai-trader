@@ -76,7 +76,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
         paper_repo = SqlAlchemyPaperRepository(db_manager.session_factory)
+        import nexus.infrastructure.db.models  # noqa: F401
+        from nexus.application.futures.broker import FuturesPaperBroker
+        from nexus.application.futures.funding_service import FuturesFundingService
         from nexus.application.risk_guard import SpotSignalRiskApprover
+        from nexus.infrastructure.db.base import Base
+        from nexus.infrastructure.db.futures_repository import SqlAlchemyFuturesRepository
+
+        # Automatically ensure database tables exist (PostgreSQL / SQLite)
+        async with db_manager.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+        funding_service = FuturesFundingService()
+        futures_repo = SqlAlchemyFuturesRepository(db_manager.session_factory)
+        futures_broker = FuturesPaperBroker(
+            repository=futures_repo,
+            market_data=market_data_service,
+            funding_service=funding_service,
+        )
 
         signal_approver = SpotSignalRiskApprover(
             allowed_symbols=active_settings.allowed_symbols
@@ -109,6 +126,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             strategy_engine=strategy_engine,
             broker=broker,
             ai_client=ai_client,
+            futures_broker=futures_broker,
         )
 
         app.state.settings = active_settings
@@ -121,6 +139,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.strategy_engine = strategy_engine
         app.state.broker = broker
         app.state.autonomous_engine = autonomous_engine
+        app.state.futures_broker = futures_broker
+        app.state.funding_service = funding_service
 
         # Start autonomous multi-agent background trading and intelligence loops
         await autonomous_engine.start()
@@ -133,12 +153,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allowed_symbols=active_settings.allowed_symbols,
             supported_timeframes=active_settings.supported_timeframes,
             autonomous_engine="active",
+            futures_paper_engine="active",
         )
 
         try:
             yield
         finally:
             await autonomous_engine.stop()
+            await funding_service.close()
             await market_analysis_service.close()
             await market_data_service.close()
             await db_manager.dispose()

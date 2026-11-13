@@ -1,5 +1,6 @@
 export type NavTab =
   | "Overview"
+  | "Futures Trading"
   | "Scanner & Radar"
   | "Strategies"
   | "Trades"

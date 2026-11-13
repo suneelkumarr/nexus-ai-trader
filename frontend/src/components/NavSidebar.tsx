@@ -7,6 +7,7 @@ import {
   Radar,
   Settings,
   ShieldCheck,
+  Zap,
 } from "lucide-react";
 import type { NavTab } from "../types/system";
 
@@ -24,6 +25,7 @@ const NAV_ITEMS: Array<{
   icon: typeof LayoutDashboard;
 }> = [
   { id: "Overview", label: "Overview", sublabel: "3D Core & Live Feed", icon: LayoutDashboard },
+  { id: "Futures Trading", label: "Futures Trading", sublabel: "USDT-M 1-5x Shorting", icon: Zap },
   { id: "Scanner & Radar", label: "Scanner & Radar", sublabel: "54 Markets & iPad HUD", icon: Radar },
   { id: "Strategies", label: "Strategies", sublabel: "V1 Engine & Signals", icon: Cpu },
   { id: "Trades", label: "Trades", sublabel: "Positions & Ledger", icon: BarChart3 },

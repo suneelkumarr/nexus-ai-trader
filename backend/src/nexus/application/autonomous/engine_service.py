@@ -66,6 +66,7 @@ class AutonomousEngineService:
         scanner: MultiMarketScanner | None = None,
         detector: ArbitrageDetector | None = None,
         ai_client: AIAnalysisClient | None = None,
+        futures_broker: Any | None = None,
     ) -> None:
         self._settings = settings
         self._market_data = market_data
@@ -77,6 +78,7 @@ class AutonomousEngineService:
         self._scanner = scanner or MultiMarketScanner()
         self._detector = detector or ArbitrageDetector()
         self._ai_client = ai_client
+        self._futures_broker = futures_broker
 
         from nexus.application.strategy.v2_engine import NexusStrategyV2
 
@@ -240,6 +242,13 @@ class AutonomousEngineService:
 
         if risk_state.kill_switch_active:
             return {"status": "HALTED", "reason": "Kill switch active"}
+
+        # Synchronize and monitor open futures positions (mark price, SL/TP, auto-liquidation)
+        if self._futures_broker is not None:
+            try:
+                await self._futures_broker.get_open_positions()
+            except Exception as exc:
+                logger.debug("autonomous_futures_sync_error", error=str(exc))
 
         open_positions = await self._paper_repo.get_open_positions(portfolio.id)
         pos_by_symbol = {

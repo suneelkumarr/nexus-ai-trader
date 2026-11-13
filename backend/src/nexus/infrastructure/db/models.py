@@ -295,3 +295,86 @@ class TradeLedgerORM(Base):
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     closed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
+
+class PaperFuturesPositionORM(TimestampMixin, Base):
+    """Simulated USDT-M isolated margin perpetual futures position."""
+
+    __tablename__ = "paper_futures_positions"
+    __table_args__ = (
+        CheckConstraint("side IN ('LONG', 'SHORT')", name="valid_futures_side"),
+        CheckConstraint("leverage >= 1 AND leverage <= 5", name="valid_futures_leverage"),
+        CheckConstraint("margin_mode = 'ISOLATED'", name="isolated_margin_only"),
+        CheckConstraint("quantity > 0", name="positive_futures_qty"),
+        CheckConstraint("entry_price_usdt > 0", name="positive_futures_entry_price"),
+        CheckConstraint("initial_margin_inr > 0", name="positive_futures_margin"),
+        CheckConstraint("status IN ('open', 'closed', 'liquidated')", name="valid_futures_status"),
+        Index("ix_futures_positions_portfolio_status", "portfolio_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    portfolio_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False
+    )
+    symbol: Mapped[str] = mapped_column(String(24), nullable=False)
+    side: Mapped[str] = mapped_column(String(8), nullable=False)
+    leverage: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    margin_mode: Mapped[str] = mapped_column(String(16), default="ISOLATED", nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
+    entry_price_usdt: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
+    liquidation_price_usdt: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
+    stop_loss_price_usdt: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
+    take_profit_price_usdt: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
+    initial_margin_inr: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    entry_fee_inr: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), default=Decimal("0"), nullable=False
+    )
+    exit_fee_inr: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), default=Decimal("0"), nullable=False
+    )
+    exit_price_usdt: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
+    realized_pnl_inr: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), default=Decimal("0"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), default="open", nullable=False)
+    close_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class PaperFuturesOrderORM(TimestampMixin, Base):
+    """Virtual futures execution order record."""
+
+    __tablename__ = "paper_futures_orders"
+    __table_args__ = (
+        CheckConstraint(
+            "side IN ('OPEN_LONG', 'CLOSE_LONG', 'OPEN_SHORT', 'CLOSE_SHORT')",
+            name="valid_futures_order_side",
+        ),
+        CheckConstraint("order_type IN ('market', 'limit')", name="valid_futures_order_type"),
+        CheckConstraint(
+            "status IN ('pending', 'filled', 'rejected', 'cancelled')",
+            name="valid_futures_order_status",
+        ),
+        CheckConstraint("quantity > 0", name="positive_futures_order_qty"),
+        Index("ix_paper_futures_orders_portfolio", "portfolio_id", "symbol"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    portfolio_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False
+    )
+    client_order_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    symbol: Mapped[str] = mapped_column(String(24), nullable=False)
+    side: Mapped[str] = mapped_column(String(16), nullable=False)
+    order_type: Mapped[str] = mapped_column(String(16), default="market", nullable=False)
+    leverage: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(24, 10), nullable=False)
+    limit_price_usdt: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
+    stop_loss_price_usdt: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
+    take_profit_price_usdt: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
+    executed_price_usdt: Mapped[Decimal | None] = mapped_column(Numeric(24, 10), nullable=True)
+    fee_inr: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=Decimal("0"), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+

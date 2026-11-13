@@ -236,3 +236,83 @@ export async function refreshAIResearch(): Promise<import("../types/system").AIR
     },
   );
 }
+
+// ---------------------------------------------------------------------------
+// Crypto Futures Paper Trading Endpoints
+// ---------------------------------------------------------------------------
+
+export async function fetchFuturesSummary(
+  signal?: AbortSignal,
+): Promise<import("../types/futures").FuturesAccountSummary> {
+  return requestJson<import("../types/futures").FuturesAccountSummary>(
+    "/api/v1/futures/summary",
+    {
+      method: "GET",
+      signal,
+    },
+  );
+}
+
+export async function fetchFuturesPositions(
+  status: "open" | "all" = "open",
+  signal?: AbortSignal,
+): Promise<import("../types/futures").FuturesPosition[]> {
+  return requestJson<import("../types/futures").FuturesPosition[]>(
+    `/api/v1/futures/positions?status=${status}`,
+    {
+      method: "GET",
+      signal,
+    },
+  );
+}
+
+export async function placeFuturesOrder(
+  order: import("../types/futures").FuturesOrderRequest,
+): Promise<import("../types/futures").FuturesOrderResult> {
+  return requestJson<import("../types/futures").FuturesOrderResult>(
+    "/api/v1/futures/orders",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(order),
+    },
+  );
+}
+
+export async function closeFuturesPosition(
+  positionId: string,
+): Promise<import("../types/futures").FuturesPosition> {
+  return requestJson<import("../types/futures").FuturesPosition>(
+    `/api/v1/futures/positions/${positionId}/close`,
+    {
+      method: "POST",
+    },
+  );
+}
+
+export async function fetchFuturesFundingRates(
+  symbols?: string,
+  signal?: AbortSignal,
+): Promise<Record<string, import("../types/futures").FundingRateInfo>> {
+  const query = symbols ? `?symbols=${encodeURIComponent(symbols)}` : "";
+  return requestJson<Record<string, import("../types/futures").FundingRateInfo>>(
+    `/api/v1/futures/funding-rates${query}`,
+    {
+      method: "GET",
+      signal,
+    },
+  );
+}
+
+export async function toggleFuturesAutoTrade(
+  enabled: boolean,
+): Promise<{ status: string; auto_trade_enabled: boolean }> {
+  return requestJson<{ status: string; auto_trade_enabled: boolean }>(
+    "/api/v1/futures/toggle-auto-trade",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    },
+  );
+}

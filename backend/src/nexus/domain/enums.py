@@ -47,10 +47,12 @@ class SignalAction(StrEnum):
 
 
 class SignalDirection(StrEnum):
-    """Directional intent of Strategy Engine V1 signals (spot-only LONG/EXIT)."""
+    """Directional intent of Strategy Engine signals (spot and futures)."""
 
     LONG = "long"
     EXIT_LONG = "exit_long"
+    SHORT = "short"
+    EXIT_SHORT = "exit_short"
     FLAT = "flat"
 
 

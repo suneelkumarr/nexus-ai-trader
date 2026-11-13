@@ -7,6 +7,7 @@ import { NexusScene } from "./components/NexusScene";
 import { PortfolioBottomDeck } from "./components/PortfolioBottomDeck";
 import { TopBar } from "./components/TopBar";
 import { BacktestingView } from "./components/views/BacktestingView";
+import { FuturesTradingView } from "./components/views/FuturesTradingView";
 import { MultiMarketRadarView } from "./components/views/MultiMarketRadarView";
 import { RiskView } from "./components/views/RiskView";
 import { SettingsView } from "./components/views/SettingsView";
@@ -171,6 +172,10 @@ export function App() {
                   {/* Portfolio Balances, Open Positions, and Realized P&L Ledger */}
                   <PortfolioBottomDeck snapshot={snapshot} />
                 </div>
+              )}
+
+              {activeTab === "Futures Trading" && (
+                <FuturesTradingView snapshot={snapshot} />
               )}
 
               {activeTab === "Scanner & Radar" && <MultiMarketRadarView />}
