@@ -627,6 +627,29 @@ class PersistentPaperBroker:
             results.append(await self.submit_order(sell_req, now_utc=ref_now))
         return results
 
+    async def reset_kill_switch(
+        self,
+        portfolio_id: UUID,
+        *,
+        reason: str = "Operator manually reset and disarmed kill switch.",
+        now_utc: datetime | None = None,
+    ) -> None:
+        """Reset and disarm the emergency kill switch in persistent storage."""
+        ref_now = now_utc or datetime.now(UTC)
+        risk_state = await self._repo.get_or_create_risk_state(
+            portfolio_id, initial_capital_inr=self._initial_capital_inr
+        )
+        risk_state.kill_switch_active = False
+        risk_state.kill_switch_reason = f"Disarmed at {ref_now.isoformat()}: {reason}"
+        risk_state.kill_switch_triggered_at = None
+        await self._repo.save_risk_state(risk_state)
+
+        logger.info(
+            "emergency_kill_switch_reset",
+            portfolio_id=str(portfolio_id),
+            reason=reason,
+        )
+
     async def compute_pnl_summary(self, portfolio_id: UUID) -> PortfolioPnLSummary:
         """Compute live realized, unrealized P&L, drawdown, and daily loss percentages."""
         portfolio = await self._repo.get_or_create_portfolio(

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   CheckCircle2,
   Database,
@@ -8,6 +8,9 @@ import {
   RefreshCw,
   Sparkles,
   TriangleAlert,
+  Layers,
+  ShieldCheck,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   fetchCandlesStatus,
@@ -40,8 +43,10 @@ const SYMBOLS = [
 ] as const;
 const TIMEFRAMES = ["5m", "15m", "1h", "4h"] as const;
 
-function EquityCurveSvg({ run }: { run: BacktestRunResult }) {
+function InteractiveEquityCurveSvg({ run }: { run: BacktestRunResult }) {
   const points = run.equity_curve;
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
   if (points.length < 2) {
     return (
       <div className="flex h-36 items-center justify-center font-mono text-xs text-slate-500">
@@ -51,8 +56,8 @@ function EquityCurveSvg({ run }: { run: BacktestRunResult }) {
   }
 
   const width = 560;
-  const height = 140;
-  const pad = 12;
+  const height = 150;
+  const pad = 14;
 
   const eqValues = points.map((p) => toFiniteNumber(p.equity_inr));
   const bmValues = points.map((p) => toFiniteNumber(p.benchmark_equity_inr));
@@ -61,36 +66,93 @@ function EquityCurveSvg({ run }: { run: BacktestRunResult }) {
   const maxVal = Math.max(...allVals);
   const span = Math.max(maxVal - minVal, 1);
 
-  const toCoords = (vals: number[]): string =>
-    vals
-      .map((val, idx) => {
-        const x = pad + (idx / Math.max(vals.length - 1, 1)) * (width - pad * 2);
-        const y = height - pad - ((val - minVal) / span) * (height - pad * 2);
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(" ");
+  const coords = points.map((p, idx) => {
+    const x = pad + (idx / Math.max(points.length - 1, 1)) * (width - pad * 2);
+    const yEq = height - pad - ((toFiniteNumber(p.equity_inr) - minVal) / span) * (height - pad * 2);
+    const yBm = height - pad - ((toFiniteNumber(p.benchmark_equity_inr) - minVal) / span) * (height - pad * 2);
+    return {
+      x,
+      yEq,
+      yBm,
+      eq: toFiniteNumber(p.equity_inr),
+      bm: toFiniteNumber(p.benchmark_equity_inr),
+      timestamp: p.timestamp,
+    };
+  });
+
+  const eqPath = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(1)} ${c.yEq.toFixed(1)}`).join(" ");
+  const bmPath = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(1)} ${c.yBm.toFixed(1)}`).join(" ");
+
+  const active = hoverIdx !== null && coords[hoverIdx] ? coords[hoverIdx] : coords[coords.length - 1];
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * width;
+    let closest = 0;
+    let minD = Infinity;
+    coords.forEach((c, idx) => {
+      const d = Math.abs(c.x - svgX);
+      if (d < minD) {
+        minD = d;
+        closest = idx;
+      }
+    });
+    setHoverIdx(closest);
+  };
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      className="h-36 w-full rounded border border-slate-800/80 bg-nexus-void/90"
-      role="img"
-      aria-label={`${run.split.split_name} Strategy vs Buy and Hold Equity Curve`}
-    >
-      <polyline
-        fill="none"
-        stroke="#d4af37"
-        strokeWidth="1.5"
-        strokeDasharray="4 3"
-        points={toCoords(bmValues)}
-      />
-      <polyline
-        fill="none"
-        stroke="#22d3ee"
-        strokeWidth="2"
-        points={toCoords(eqValues)}
-      />
-    </svg>
+    <div className="relative">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-36 w-full cursor-crosshair rounded border border-slate-800/80 bg-nexus-void/90 select-none shadow-inner"
+        role="img"
+        aria-label={`${run.split.split_name} Strategy vs Buy and Hold Equity Curve`}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setHoverIdx(null)}
+      >
+        <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} stroke="#1e293b" strokeDasharray="3 3" />
+        <line x1={pad} y1={pad} x2={width - pad} y2={pad} stroke="#1e293b" strokeDasharray="3 3" />
+
+        {/* Buy and hold benchmark */}
+        <path d={bmPath} fill="none" stroke="#d4af37" strokeWidth="1.6" strokeDasharray="4 3" />
+
+        {/* Strategy Net Equity */}
+        <path d={eqPath} fill="none" stroke="#22d3ee" strokeWidth="2.2" strokeLinecap="round" />
+
+        {/* Hover Crosshair */}
+        {active && (
+          <g>
+            <line
+              x1={active.x}
+              y1={pad}
+              x2={active.x}
+              y2={height - pad}
+              stroke="#22d3ee"
+              strokeDasharray="2 2"
+              strokeWidth="1"
+              strokeOpacity="0.6"
+            />
+            <circle cx={active.x} cy={active.yEq} r="3.5" fill="#22d3ee" stroke="#ffffff" strokeWidth="1" />
+            <circle cx={active.x} cy={active.yBm} r="3" fill="#d4af37" stroke="#ffffff" strokeWidth="1" />
+          </g>
+        )}
+      </svg>
+
+      {/* Hover Floating HUD */}
+      {hoverIdx !== null && active && (
+        <div
+          className="pointer-events-none absolute z-20 rounded border border-cyan-500/40 bg-slate-950/95 px-2.5 py-1.5 shadow-xl backdrop-blur font-mono text-[10px]"
+          style={{
+            left: Math.min(Math.max(active.x - 60, 5), width - 140),
+            top: 5,
+          }}
+        >
+          <div className="text-slate-400">{active.timestamp?.slice(0, 19).replace("T", " ")}</div>
+          <div className="mt-0.5 text-cyan-300 font-bold">Strategy: {formatInr(active.eq)}</div>
+          <div className="text-gold-300">Benchmark: {formatInr(active.bm)}</div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -118,7 +180,7 @@ function SplitCard({ title, run }: { title: string; run: BacktestRunResult }) {
         </span>
       </div>
 
-      <EquityCurveSvg run={run} />
+      <InteractiveEquityCurveSvg run={run} />
 
       <div className="flex items-center justify-between font-mono text-[10px] text-slate-400">
         <span className="text-cyan-300">— Strategy Net Equity</span>
@@ -134,21 +196,21 @@ function SplitCard({ title, run }: { title: string; run: BacktestRunResult }) {
       <div className="grid grid-cols-2 gap-2 font-mono text-xs">
         <div className="rounded bg-nexus-void/80 p-2">
           <span className="block text-[10px] text-slate-500">NET PROFIT</span>
-          <span className="tabular-nums text-white">{formatInr(m.net_profit_inr, true)}</span>
+          <span className="tabular-nums text-white font-semibold">{formatInr(m.net_profit_inr, true)}</span>
         </div>
         <div className="rounded bg-nexus-void/80 p-2">
           <span className="block text-[10px] text-slate-500">WIN RATE / TRADES</span>
-          <span className="tabular-nums text-white">
+          <span className="tabular-nums text-white font-semibold">
             {m.win_rate_pct.toFixed(1)}% ({m.number_of_trades})
           </span>
         </div>
         <div className="rounded bg-nexus-void/80 p-2">
           <span className="block text-[10px] text-slate-500">MAX DRAWDOWN</span>
-          <span className="tabular-nums text-amber-300">{formatPct(m.max_drawdown_pct)}</span>
+          <span className="tabular-nums text-amber-300 font-semibold">{formatPct(m.max_drawdown_pct)}</span>
         </div>
         <div className="rounded bg-nexus-void/80 p-2">
           <span className="block text-[10px] text-slate-500">SHARPE RATIO</span>
-          <span className="tabular-nums text-cyan-300">{m.sharpe_ratio.toFixed(2)}</span>
+          <span className="tabular-nums text-cyan-300 font-semibold">{m.sharpe_ratio.toFixed(2)}</span>
         </div>
         <div className="rounded bg-nexus-void/80 p-2">
           <span className="block text-[10px] text-slate-500">FEE + SLIP DRAG</span>
@@ -158,13 +220,54 @@ function SplitCard({ title, run }: { title: string; run: BacktestRunResult }) {
         </div>
         <div className="rounded bg-nexus-void/80 p-2">
           <span className="block text-[10px] text-slate-500">VS BENCHMARK</span>
-          <span className="tabular-nums text-slate-200">
+          <span className="tabular-nums text-emerald-300 font-semibold">
             {formatPct(run.benchmark.excess_net_return_pct, true)}
           </span>
         </div>
       </div>
     </div>
   );
+}
+
+function exportBacktestCsv(report: BacktestSuiteReport) {
+  if (!report) return;
+
+  const testPoints = report.test_result.equity_curve;
+  const headers = [
+    "Bar Index",
+    "Timestamp UTC",
+    "Strategy Net Equity (INR)",
+    "Benchmark Equity (INR)",
+    "Net Return (%)",
+    "Timeframe",
+    "Symbol",
+  ];
+
+  const initialCap = toFiniteNumber(report.test_result.metrics.initial_capital_inr || 10000);
+  const rows = testPoints.map((p, idx) => {
+    const eq = toFiniteNumber(p.equity_inr);
+    const retPct = initialCap > 0 ? ((eq - initialCap) / initialCap) * 100 : 0;
+    return [
+      idx + 1,
+      `"${p.timestamp}"`,
+      eq.toFixed(2),
+      toFiniteNumber(p.benchmark_equity_inr).toFixed(2),
+      retPct.toFixed(2),
+      `"${report.timeframe}"`,
+      `"${report.symbol}"`,
+    ];
+  });
+
+  const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `backtest_${report.symbol.replace("/", "_")}_${report.timeframe}_${report.report_id.slice(0, 8)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export function BacktestingView() {
@@ -174,7 +277,7 @@ export function BacktestingView() {
   const [takerFeeBps, setTakerFeeBps] = useState<number>(10);
   const [spreadBps, setSpreadBps] = useState<number>(4);
   const [slippageBps, setSlippageBps] = useState<number>(5);
-  const [lookbackBars, setLookbackBars] = useState<number>(200);
+  const [lookbackBars, setLookbackBars] = useState<number>(500);
   const [strategyId, setStrategyId] = useState<string>("combined");
 
   const [candleStatus, setCandleStatus] = useState<CandlesStatusResponse | null>(null);
@@ -186,6 +289,7 @@ export function BacktestingView() {
   const [running, setRunning] = useState<boolean>(false);
   const [runStage, setRunStage] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [csvDownloaded, setCsvDownloaded] = useState<boolean>(false);
 
   // Fetch candle status on symbol/timeframe change
   const refreshCandleStatus = async () => {
@@ -261,7 +365,7 @@ export function BacktestingView() {
     }
   }
 
-  const handleDownloadReport = () => {
+  const handleDownloadReportJson = () => {
     if (!report) return;
     const blob = new Blob([JSON.stringify(report, null, 2)], {
       type: "application/json",
@@ -273,6 +377,38 @@ export function BacktestingView() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const handleExportCsvClick = () => {
+    if (!report) return;
+    exportBacktestCsv(report);
+    setCsvDownloaded(true);
+    setTimeout(() => setCsvDownloaded(false), 3000);
+  };
+
+  // Overfitting and Robustness Assessment
+  const robustnessAssessment = useMemo(() => {
+    if (!report) return null;
+    const trainSharpe = report.train_result.metrics.sharpe_ratio;
+    const testSharpe = report.test_result.metrics.sharpe_ratio;
+    const testReturn = report.test_result.metrics.total_return_pct;
+    const excessReturn = report.test_result.benchmark.excess_net_return_pct;
+
+    let rating: "EXCELLENT" | "ROBUST" | "MODERATE" | "OVERFIT" = "ROBUST";
+    let message = "Out-of-sample test results match train behavior with acceptable variance.";
+    let badgeColor = "border-emerald-500/40 bg-emerald-950/20 text-emerald-300";
+
+    if (testSharpe >= trainSharpe * 0.85 && testReturn > 0) {
+      rating = "EXCELLENT";
+      message = "High statistical persistence: Out-of-sample test window confirms positive edge without overfitting.";
+      badgeColor = "border-emerald-400 bg-emerald-500/20 text-emerald-200";
+    } else if (testSharpe < 0.3 && trainSharpe > 1.2) {
+      rating = "OVERFIT";
+      message = "High parameter sensitivity: Strategy decayed significantly in unseen test window.";
+      badgeColor = "border-rose-500 bg-rose-950/40 text-rose-300";
+    }
+
+    return { rating, message, badgeColor, testSharpe, trainSharpe, excessReturn };
+  }, [report]);
 
   return (
     <div className="space-y-4">
@@ -431,7 +567,7 @@ export function BacktestingView() {
           </label>
         </div>
 
-        {/* Lookback Presets & Quantitative Sample Size Callout */}
+        {/* Lookback Presets */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-slate-800 bg-nexus-void/60 p-2.5 font-mono text-[11px]">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-slate-400">Quick Presets:</span>
@@ -459,33 +595,44 @@ export function BacktestingView() {
           <div className="text-[10px]">
             {lookbackBars <= 200 ? (
               <span className="text-amber-300">
-                ⚠️ Micro Window (50h): Expect 0-2 trades on test split. Filter avoids chop.
+                ⚠️ Micro Window: Strict filters may execute fewer trades to avoid noise.
               </span>
             ) : (
               <span className="text-emerald-300">
-                ✅ Statistical Rigor: Multi-regime coverage across bull/bear cycles.
+                ✅ Statistical Rigor: Multi-regime coverage across market cycles.
               </span>
             )}
           </div>
         </div>
 
-        {/* Action button & Live Stage indicator */}
+        {/* Action Button & Report Controls */}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-cyan-500/15 pt-3">
           {report ? (
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-[11px] text-slate-400">
-                Report <strong className="text-cyan-300">{report.report_id}</strong> · Generated{" "}
-                {formatUtcTime(report.generated_at)} · OOS Verified:{" "}
+                Report <strong className="text-cyan-300">{report.report_id.slice(0, 8)}</strong> · OOS Verified:{" "}
                 <strong className="text-emerald-300">
                   {report.out_of_sample_verified ? "YES" : "NO"}
                 </strong>
               </span>
+
+              {/* 1-Click CSV Export */}
               <button
                 type="button"
-                onClick={handleDownloadReport}
-                className="inline-flex items-center gap-1 rounded border border-cyan-500/30 px-2 py-0.5 font-mono text-[10px] text-cyan-300 hover:bg-cyan-950/40"
+                onClick={handleExportCsvClick}
+                className="inline-flex items-center gap-1 rounded border border-cyan-500/40 bg-cyan-950/40 px-2.5 py-1 font-mono text-xs text-cyan-200 hover:bg-cyan-900/60 shadow"
               >
-                <Download className="h-3 w-3" />
+                <FileSpreadsheet className="h-3.5 w-3.5 text-cyan-400" />
+                <span>{csvDownloaded ? "CSV Exported!" : "Export CSV"}</span>
+              </button>
+
+              {/* JSON Export */}
+              <button
+                type="button"
+                onClick={handleDownloadReportJson}
+                className="inline-flex items-center gap-1 rounded border border-slate-700 bg-slate-900 px-2.5 py-1 font-mono text-xs text-slate-300 hover:text-white"
+              >
+                <Download className="h-3.5 w-3.5" />
                 <span>JSON</span>
               </button>
             </div>
@@ -514,7 +661,7 @@ export function BacktestingView() {
           </div>
         )}
 
-        {/* Error notification with one-click fix */}
+        {/* Error Notification */}
         {error && (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200 font-mono">
             <div className="flex items-start gap-2">
@@ -534,12 +681,93 @@ export function BacktestingView() {
         )}
       </div>
 
-      {/* 3. Output Split Cards */}
+      {/* 3. Robustness & Overfitting Verification Scorecard */}
+      {robustnessAssessment && (
+        <div className={`nexus-panel rounded-lg p-3.5 border ${robustnessAssessment.badgeColor}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-400" />
+              <span className="font-display text-sm font-semibold text-white">
+                Statistical Robustness Assessment:
+              </span>
+              <span className="font-mono text-xs font-bold uppercase underline">
+                {robustnessAssessment.rating}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 font-mono text-xs">
+              <span>
+                Train Sharpe: <strong className="text-cyan-300">{robustnessAssessment.trainSharpe.toFixed(2)}</strong>
+              </span>
+              <span>
+                Test Sharpe: <strong className="text-emerald-300">{robustnessAssessment.testSharpe.toFixed(2)}</strong>
+              </span>
+              <span>
+                Excess Alpha: <strong className="text-gold-300">{formatPct(robustnessAssessment.excessReturn, true)}</strong>
+              </span>
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-slate-300 font-mono">
+            {robustnessAssessment.message}
+          </p>
+        </div>
+      )}
+
+      {/* 4. Output Split Cards (Train 60%, Validation 20%, Untouched Test 20%) */}
       {report && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <SplitCard title="Train Period (60%)" run={report.train_result} />
           <SplitCard title="Validation Period (20%)" run={report.validation_result} />
           <SplitCard title="Untouched Test Window (20%)" run={report.test_result} />
+        </div>
+      )}
+
+      {/* 5. Backtest Test Period Execution Blotter */}
+      {report && report.test_result.equity_curve.length > 0 && (
+        <div className="nexus-panel overflow-hidden rounded-lg">
+          <div className="flex items-center justify-between border-b border-cyan-500/15 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-cyan-400" />
+              <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-white">
+                Untouched Test Window Bar-by-Bar Telemetry Blotter
+              </h3>
+            </div>
+            <span className="font-mono text-[11px] text-slate-400">
+              {report.test_result.equity_curve.length} EVALUATED BARS
+            </span>
+          </div>
+
+          <div className="max-h-60 overflow-y-auto overflow-x-auto">
+            <table className="w-full text-left font-mono text-xs">
+              <thead className="sticky top-0 border-b border-slate-800 bg-[#030712] text-[10px] uppercase text-slate-400">
+                <tr>
+                  <th className="px-4 py-2">Bar #</th>
+                  <th className="px-4 py-2">Timestamp UTC</th>
+                  <th className="px-4 py-2">Strategy Net Equity</th>
+                  <th className="px-4 py-2">Benchmark Equity</th>
+                  <th className="px-4 py-2">Excess Alpha</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/70 text-slate-300">
+                {report.test_result.equity_curve.slice(-30).map((pt, idx) => {
+                  const eq = toFiniteNumber(pt.equity_inr);
+                  const bm = toFiniteNumber(pt.benchmark_equity_inr);
+                  const delta = eq - bm;
+
+                  return (
+                    <tr key={idx} className="hover:bg-cyan-500/5 transition">
+                      <td className="px-4 py-2 text-slate-500">#{idx + 1}</td>
+                      <td className="px-4 py-2 text-slate-400">{formatUtcTime(pt.timestamp)}</td>
+                      <td className="px-4 py-2 font-semibold text-cyan-300">{formatInr(eq)}</td>
+                      <td className="px-4 py-2 text-gold-300">{formatInr(bm)}</td>
+                      <td className={`px-4 py-2 font-bold ${delta >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                        {formatInr(delta, true)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@ import { frontendConfig } from "../config/env";
 import type {
   BacktestSuiteReport,
   EmergencyStopResponse,
+  ResetKillSwitchResponse,
   HealthResponse,
   MarketAnalysisOutput,
   SanitizedSettingsResponse,
@@ -89,6 +90,15 @@ export async function triggerEmergencyStop(params: {
   flatten_positions: boolean;
 }): Promise<EmergencyStopResponse> {
   return requestJson<EmergencyStopResponse>("/api/v1/terminal/emergency-stop", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export async function resetEmergencyStop(params: {
+  reason: string;
+}): Promise<ResetKillSwitchResponse> {
+  return requestJson<ResetKillSwitchResponse>("/api/v1/terminal/reset-kill-switch", {
     method: "POST",
     body: JSON.stringify(params),
   });

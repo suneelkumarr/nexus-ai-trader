@@ -202,6 +202,17 @@ async def test_emergency_stop_and_settings_redaction(tmp_path: Path) -> None:
             assert snap.json()["risk"]["kill_switch_active"] is True
             assert snap.json()["risk"]["kill_switch_reason"] == "Operator halt test"
 
+            reset_resp = await client.post(
+                "/api/v1/terminal/reset-kill-switch",
+                json={"reason": "Operator test reset"},
+            )
+            assert reset_resp.status_code == 200
+            assert reset_resp.json()["kill_switch_active"] is False
+
+            snap_after = await client.get("/api/v1/terminal/snapshot")
+            assert snap_after.status_code == 200
+            assert snap_after.json()["risk"]["kill_switch_active"] is False
+
             settings_resp = await client.get("/api/v1/terminal/settings")
             assert settings_resp.status_code == 200
             s_text = settings_resp.text

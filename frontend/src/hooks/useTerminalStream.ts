@@ -3,9 +3,11 @@ import {
   buildTerminalWebSocketUrl,
   fetchTerminalSnapshot,
   triggerEmergencyStop,
+  resetEmergencyStop,
 } from "../services/apiClient";
 import type {
   EmergencyStopResponse,
+  ResetKillSwitchResponse,
   TerminalSnapshotResponse,
   WebSocketStatus,
 } from "../types/system";
@@ -23,6 +25,7 @@ export interface UseTerminalStreamResult {
     reason: string,
     flattenPositions: boolean,
   ) => Promise<EmergencyStopResponse>;
+  disarmEmergencyStop: (reason?: string) => Promise<ResetKillSwitchResponse>;
 }
 
 const MAX_BACKOFF_MS = 15_000;
@@ -207,6 +210,25 @@ export function useTerminalStream(): UseTerminalStreamResult {
     [refresh],
   );
 
+  const disarmEmergencyStop = useCallback(
+    async (reason = "Operator manually reset and disarmed kill switch."): Promise<ResetKillSwitchResponse> => {
+      setEmergencyPending(true);
+      try {
+        const result = await resetEmergencyStop({ reason });
+        if (mountedRef.current) {
+          setLastEmergencyResponse(null);
+        }
+        await refresh();
+        return result;
+      } finally {
+        if (mountedRef.current) {
+          setEmergencyPending(false);
+        }
+      }
+    },
+    [refresh],
+  );
+
   return {
     snapshot,
     wsStatus,
@@ -217,6 +239,7 @@ export function useTerminalStream(): UseTerminalStreamResult {
     lastEmergencyResponse,
     refresh,
     activateEmergencyStop,
+    disarmEmergencyStop,
   };
 }
 

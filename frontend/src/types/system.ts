@@ -151,6 +151,13 @@ export interface EmergencyStopResponse {
   rejected_flatten_count: number;
 }
 
+export interface ResetKillSwitchResponse {
+  trading_mode: "paper";
+  kill_switch_active: boolean;
+  message: string;
+  reset_at: string;
+}
+
 export interface SignalExplanation {
   strategy_name: string;
   symbol: string;

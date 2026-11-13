@@ -142,6 +142,25 @@ class EmergencyStopResponse(BaseModel):
     rejected_flatten_count: int
 
 
+class ResetKillSwitchRequest(BaseModel):
+    """Payload to disarm and reset emergency kill switch."""
+
+    reason: str = Field(
+        default="Operator manually reset and disarmed circuit breaker.",
+        min_length=3,
+        max_length=240,
+    )
+
+
+class ResetKillSwitchResponse(BaseModel):
+    """Confirmation returned after kill switch disarm."""
+
+    trading_mode: Literal["paper"] = "paper"
+    kill_switch_active: bool = False
+    message: str
+    reset_at: datetime
+
+
 class TerminalBacktestRequest(BaseModel):
     """Run deterministic event-driven OOS backtest over stored DB candles."""
 
@@ -463,6 +482,31 @@ async def trigger_emergency_stop(
         triggered_at=now_utc,
         flattened_orders_count=len(results) - rejected,
         rejected_flatten_count=rejected,
+    )
+
+
+@router.post(
+    "/terminal/reset-kill-switch",
+    response_model=ResetKillSwitchResponse,
+    summary="Reset and disarm emergency kill switch (paper trading only)",
+)
+async def reset_emergency_stop(
+    payload: ResetKillSwitchRequest,
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    paper_repo: Annotated[PaperLedgerRepository, Depends(get_paper_ledger_repository)],
+    broker: Annotated[PersistentPaperBroker, Depends(get_persistent_paper_broker)],
+    _auth: Annotated[str, Depends(require_admin_auth)] = "ok",
+) -> ResetKillSwitchResponse:
+    """Disarm the kill switch and restore entry permissions for paper trading."""
+    portfolio = await paper_repo.get_or_create_portfolio(
+        None, initial_capital_inr=settings.initial_capital_inr
+    )
+    now_utc = datetime.now(UTC)
+    await broker.reset_kill_switch(portfolio.id, reason=payload.reason, now_utc=now_utc)
+    return ResetKillSwitchResponse(
+        kill_switch_active=False,
+        message="Emergency kill switch disarmed. Normal paper trading operations resumed.",
+        reset_at=now_utc,
     )
 
 

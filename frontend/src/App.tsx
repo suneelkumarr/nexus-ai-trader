@@ -48,6 +48,7 @@ export function App() {
     lastEmergencyResponse,
     refresh,
     activateEmergencyStop,
+    disarmEmergencyStop,
   } = useTerminalStream();
 
   // Load settings on startup
@@ -243,6 +244,7 @@ export function App() {
                   snapshot={snapshot}
                   emergencyPending={emergencyPending}
                   onActivateEmergencyStop={activateEmergencyStop}
+                  onDisarmEmergencyStop={disarmEmergencyStop}
                 />
               )}
 
