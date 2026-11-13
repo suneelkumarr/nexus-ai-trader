@@ -17,6 +17,7 @@ from nexus.application.risk_manager import IndependentRiskManager
 from nexus.application.strategy.v1_engine import NexusStrategyV1
 from nexus.core.config import Settings
 from nexus.core.logging import get_logger
+from nexus.domain.arbitrage import SyntheticDislocation, TriangularOpportunity
 from nexus.domain.futures import FuturesOrderAction, FuturesOrderRequest
 from nexus.domain.interfaces import (
     AIAnalysisClient,
@@ -332,6 +333,7 @@ class AutonomousEngineService:
         # 3. Top Opportunity Leaders (top 8 hot momentum/breakout candidates)
         top_opportunity_symbols = [s for s, _, _ in scored_candidates if s not in core_symbols][:8]
         # 4. Rotating slice across entire 115+ coin universe (10 coins per cycle round-robin)
+        rotating_slice: list[str] = []
         if binance_universe:
             slice_size = 10
             start_idx = self._universe_queue_index % len(binance_universe)
@@ -342,8 +344,6 @@ class AutonomousEngineService:
             self._universe_queue_index = (
                 self._universe_queue_index + slice_size
             ) % len(binance_universe)
-        else:
-            rotating_slice = []
 
         # Combine into complete cycle watchlist
         watchlist = list(
@@ -535,10 +535,10 @@ class AutonomousEngineService:
             return {"status": "NO_TICKERS"}
 
         scan_result = self._detector.evaluate(tickers)
-        executable_arbs = [
+        executable_arbs: list[TriangularOpportunity] = [
             o for o in scan_result.triangular_opportunities if o.net_edge_bps > Decimal("0")
         ]
-        significant_dislocations = [
+        significant_dislocations: list[SyntheticDislocation] = [
             d
             for d in scan_result.synthetic_dislocations
             if abs(d.dislocation_bps) >= Decimal("2.0")
