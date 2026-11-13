@@ -4,6 +4,7 @@ import { AnalyticsSignalsPanel } from "./components/AnalyticsSignalsPanel";
 import { AutonomousAIResearchDeck } from "./components/AutonomousAIResearchDeck";
 import { AutonomousMissionControlBar } from "./components/AutonomousMissionControlBar";
 import { NavSidebar } from "./components/NavSidebar";
+import { MobileBottomNav } from "./components/MobileBottomNav";
 import { NexusScene } from "./components/NexusScene";
 import { PortfolioBottomDeck } from "./components/PortfolioBottomDeck";
 import { TopBar } from "./components/TopBar";
@@ -135,7 +136,7 @@ export function App() {
           openPositionsCount={snapshot?.open_positions.length ?? 0}
         />
 
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-5">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-5 pb-20 lg:pb-5">
           {error && (
             <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 font-mono text-xs text-amber-200">
               Telemetry warning: {error}. Displaying only verified persisted state — never fabricated statistics.
@@ -273,6 +274,14 @@ export function App() {
           </div>
         </div>
       </footer>
+
+      {/* Mobile Responsive Bottom Navigation Bar */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        killSwitchActive={snapshot?.risk.kill_switch_active ?? false}
+        openPositionsCount={snapshot?.open_positions.length ?? 0}
+      />
     </div>
   );
 }

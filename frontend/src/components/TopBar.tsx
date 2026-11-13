@@ -7,7 +7,11 @@ import {
   Wifi,
   WifiOff,
   X,
+  FileSpreadsheet,
+  Scale,
 } from "lucide-react";
+import { InstitutionalTearsheetModal } from "./common/InstitutionalTearsheetModal";
+import { PortfolioOptimizerModal } from "./common/PortfolioOptimizerModal";
 import type {
   EmergencyStopResponse,
   TerminalSnapshotResponse,
@@ -42,6 +46,8 @@ export function TopBar({
   );
   const [stopError, setStopError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [tearsheetOpen, setTearsheetOpen] = useState(false);
+  const [optimizerOpen, setOptimizerOpen] = useState(false);
 
   const killSwitchActive = snapshot?.risk.kill_switch_active ?? false;
   const engineOk = snapshot?.engine_health.overall_status === "ok";
@@ -159,6 +165,28 @@ export function TopBar({
           >
             <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin text-cyan-400" : ""}`} />
             <span>SYNC</span>
+          </button>
+
+          {/* Institutional Tearsheet Modal Trigger */}
+          <button
+            type="button"
+            onClick={() => setTearsheetOpen(true)}
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-950/40 px-2.5 py-1 font-mono text-[11px] font-semibold text-cyan-200 transition-all hover:bg-cyan-900/60 shadow"
+            title="Open Institutional Tearsheet & Executive Performance Audit"
+          >
+            <FileSpreadsheet className="h-3 w-3 text-cyan-400" />
+            <span>TEARSHEET</span>
+          </button>
+
+          {/* Markowitz Optimizer Modal Trigger */}
+          <button
+            type="button"
+            onClick={() => setOptimizerOpen(true)}
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-gold-500/40 bg-gold-950/30 px-2.5 py-1 font-mono text-[11px] font-semibold text-gold-300 transition-all hover:bg-gold-900/40 shadow"
+            title="Open Markowitz Mean-Variance Efficient Frontier & Risk-Parity Optimizer"
+          >
+            <Scale className="h-3 w-3 text-gold-400" />
+            <span>OPTIMIZER</span>
           </button>
 
           {/* Emergency Kill Switch Button */}
@@ -308,6 +336,19 @@ export function TopBar({
           </div>
         </div>
       )}
+
+      {/* Institutional Tearsheet Modal */}
+      <InstitutionalTearsheetModal
+        isOpen={tearsheetOpen}
+        onClose={() => setTearsheetOpen(false)}
+        snapshot={snapshot}
+      />
+
+      {/* Markowitz Efficient Frontier Optimizer Modal */}
+      <PortfolioOptimizerModal
+        isOpen={optimizerOpen}
+        onClose={() => setOptimizerOpen(false)}
+      />
     </header>
   );
 }
