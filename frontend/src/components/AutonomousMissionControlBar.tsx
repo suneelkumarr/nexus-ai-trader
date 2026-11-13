@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Activity, Play, Pause, RefreshCw, Zap, Cpu, ShieldAlert } from "lucide-react";
+import { Activity, Play, Pause, RefreshCw, Zap, Cpu, ShieldAlert, ShieldCheck } from "lucide-react";
 import type { AutonomousEngineStatus } from "../types/system";
 
 interface AutonomousMissionControlBarProps {
@@ -95,6 +95,19 @@ export function AutonomousMissionControlBar({
               ) : (
                 <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-[9px] font-semibold text-cyan-300">
                   PAPER SECURE
+                </span>
+              )}
+              <span className="rounded-full border border-purple-500/40 bg-purple-500/15 px-2 py-0.5 font-mono text-[9px] font-bold text-purple-300 flex items-center gap-1 shadow-sm">
+                <ShieldCheck className="h-2.5 w-2.5 text-purple-400" />
+                AI DOUBLE-CHECK ACTIVE
+              </span>
+              {Boolean(status?.recent_ai_vetoes?.length) && (
+                <span
+                  className="rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 font-mono text-[9px] font-semibold text-rose-300 flex items-center gap-1"
+                  title={`Protected from ${status?.recent_ai_vetoes?.length} bad entries`}
+                >
+                  <ShieldAlert className="h-2.5 w-2.5 text-rose-400" />
+                  {status?.recent_ai_vetoes?.length} AI VETOES SAVED
                 </span>
               )}
             </div>

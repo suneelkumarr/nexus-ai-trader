@@ -183,6 +183,8 @@ class CouncilDebateRequest(BaseModel):
     rsi: float | None = None
     volume_ratio: float | None = None
     market_breadth_pct: float | None = None
+    macro_regime: str | None = None
+    is_usdt_pair: bool | None = None
 
 
 @router.post(
@@ -213,4 +215,6 @@ async def run_council_debate(
         rsi=payload.rsi,
         volume_ratio=payload.volume_ratio,
         market_breadth_pct=payload.market_breadth_pct or 58.0,
+        macro_regime=payload.macro_regime or "VOLATILE_CHOP",
+        is_usdt_pair=payload.is_usdt_pair,
     )

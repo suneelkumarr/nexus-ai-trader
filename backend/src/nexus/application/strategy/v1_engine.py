@@ -207,6 +207,7 @@ class NexusStrategyV1:
             "atr_14": round(curr_atr, 8),
             "volume_sma_20": round(curr_vol_sma, 8),
             "volume": round(curr_vol, 8),
+            "volume_ratio": round((curr_vol / curr_vol_sma) if curr_vol_sma > 0 else 1.0, 4),
         }
 
         # --- EXIT EVALUATION (when a LONG position is open) ---

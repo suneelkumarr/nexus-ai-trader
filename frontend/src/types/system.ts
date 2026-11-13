@@ -391,6 +391,14 @@ export interface AutonomousEngineStatus {
   recently_evaluated_symbols?: string[];
   recent_opportunities?: MarketOpportunityItem[];
   recent_orders_placed?: string[];
+  recent_ai_vetoes?: Array<{
+    symbol: string;
+    type: string;
+    conviction: number;
+    rationale: string;
+    timestamp: string;
+  }>;
+  ai_double_check_active?: boolean;
   execution_target?: "paper" | "live_binance";
   binance_configured?: boolean;
 }

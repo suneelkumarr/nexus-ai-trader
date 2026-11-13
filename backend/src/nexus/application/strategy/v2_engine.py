@@ -151,7 +151,12 @@ class NexusStrategyV2:
 
         # --- EXIT EVALUATION (If currently holding a position) ---
         if position is not None:
-            hit_take_profit = curr_close >= curr_middle
+            # Require price to cover transaction friction before early exit on middle BB mean
+            fee_hurdle = position.entry_price * Decimal("0.0025")  # 25 bps roundtrip fee buffer
+            min_net_profitable_price = position.entry_price + fee_hurdle
+            hit_take_profit = (
+                curr_close >= curr_middle and Decimal(str(curr_close)) >= min_net_profitable_price
+            )
             hit_overbought = curr_rsi >= self._config.rsi_exit_min
             active_stop = max(position.initial_stop_price, position.trailing_stop_price)
             hit_stop = latest_bar.low <= active_stop
@@ -212,6 +217,19 @@ class NexusStrategyV2:
                 updated_position=None,
             )
 
+        # Room to middle Bollinger Mean must clear fee drag (minimum 75 bps room)
+        room_to_mean_bps = (
+            ((curr_middle - curr_close) / curr_close) * 10000.0 if curr_close > 0 else 0.0
+        )
+        if room_to_mean_bps < 75.0:
+            return StrategyEvaluationResult(
+                signal=None,
+                status="no_signal",
+                evaluated_timestamp=latest_ts,
+                rejection_reason=f"Bounce room to middle BB ({room_to_mean_bps:.1f} bps) < 75 bps fee clearance hurdle.",
+                updated_position=None,
+            )
+
         entry_price = latest_bar.close.quantize(_PRICE_QUANT, rounding=ROUND_HALF_UP)
         atr_dec = Decimal(str(curr_atr))
         stop_price = (entry_price - (atr_dec * self._config.stop_atr_multiplier)).quantize(
@@ -260,6 +278,7 @@ class NexusStrategyV2:
                 "lower_bb": curr_lower,
                 "middle_bb": curr_middle,
                 "atr": curr_atr,
+                "volume_ratio": round((curr_vol / curr_vol_sma) if curr_vol_sma > 0 else 1.0, 4),
             },
         )
 

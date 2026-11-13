@@ -18,6 +18,7 @@ from nexus.application.strategy.v1_engine import NexusStrategyV1
 from nexus.core.config import Settings
 from nexus.core.logging import get_logger
 from nexus.domain.arbitrage import SyntheticDislocation, TriangularOpportunity
+from nexus.domain.enums import SignalDirection
 from nexus.domain.futures import FuturesOrderAction, FuturesOrderRequest
 from nexus.domain.interfaces import (
     AIAnalysisClient,
@@ -106,6 +107,7 @@ class AutonomousEngineService:
         self._recent_evaluated: list[str] = []
         self._recent_opportunities: list[dict[str, Any]] = []
         self._recent_orders: list[str] = []
+        self._recent_ai_vetoes: list[dict[str, Any]] = []
         self._execution_target: str = "paper"
 
         # Latest cached intelligence
@@ -252,6 +254,8 @@ class AutonomousEngineService:
             "recently_evaluated_symbols": self._recent_evaluated[-15:],
             "recent_opportunities": self._recent_opportunities[:8],
             "recent_orders_placed": self._recent_orders[-10:],
+            "recent_ai_vetoes": self._recent_ai_vetoes[-10:],
+            "ai_double_check_active": True,
             "execution_target": self._execution_target,
             "binance_configured": bool(self._binance_gateway and getattr(self._binance_gateway, "is_configured", False)),
         }
@@ -442,15 +446,76 @@ class AutonomousEngineService:
             evaluated.append(symbol)
 
             if eval_result.signal is not None:
-                # Multi-Agent Council of Quants Debate Gate (Phase 1)
+                # If this is an EXIT signal, execute immediately to protect capital / take profit
+                if eval_result.signal.direction == SignalDirection.EXIT_LONG:
+                    if self._execution_target == "paper":
+                        try:
+                            order = await self._broker.execute_strategy_signal(
+                                portfolio.id, eval_result.signal, now_utc=now_utc
+                            )
+                            if order.status.value == "filled":
+                                self._strategy_trades_count += 1
+                                desc = f"PAPER SPOT EXIT {symbol}"
+                                orders_placed.append(desc)
+                                exec_price = order.fill.executed_price_usdt if order.fill else "MKT"
+                                self._recent_orders.append(f"{desc} @ {exec_price}")
+                        except Exception as exc:
+                            logger.warning("autonomous_spot_exit_failed", symbol=symbol, error=str(exc))
+                    continue
+
+                # --- DIRECTIONAL ENTRY SIGNAL GATING ---
+                is_usdt = symbol.endswith("/USDT")
+                last_p_float = float(bars[-1].close) if bars else 65000.0
+                sig_indicators = eval_result.signal.indicators or {}
+
+                fast_ema = (
+                    sig_indicators.get("ema_20")
+                    or sig_indicators.get("ema_fast")
+                    or sig_indicators.get("close")
+                )
+                slow_ema = (
+                    sig_indicators.get("ema_50")
+                    or sig_indicators.get("ema_slow")
+                    or sig_indicators.get("middle_bb")
+                )
+                cur_rsi = sig_indicators.get("rsi_14") or sig_indicators.get("rsi")
+                vol_ratio = sig_indicators.get("volume_ratio")
+                if vol_ratio is None and len(bars) >= 20:
+                    vol_sma = sum(float(b.volume) for b in bars[-20:]) / 20.0
+                    vol_ratio = (float(bars[-1].volume) / vol_sma) if vol_sma > 0 else 1.0
+
+                # Phase 1: Enhanced Multi-Agent Council of Quants Debate Gate
                 council = CouncilOfQuantsEngine()
                 debate = council.evaluate_debate(
                     symbol=symbol,
                     timeframe=timeframe,
-                    last_price=float(bars[-1].close) if bars else 65000.0,
-                    market_breadth_pct=float(self._latest_ai_research.get("sentiment_index", 55)),
+                    last_price=last_p_float,
+                    fast_ema=fast_ema,
+                    slow_ema=slow_ema,
+                    rsi=cur_rsi,
+                    volume_ratio=vol_ratio,
+                    market_breadth_pct=float(ai_sentiment),
+                    macro_regime=ai_macro,
+                    is_usdt_pair=is_usdt,
                 )
-                if debate.verdict == "VETOED":
+
+                if is_usdt and (debate.verdict != "APPROVED" or debate.consensus_conviction_pct < 76):
+                    logger.info(
+                        "council_of_quants_usdt_vetoed",
+                        symbol=symbol,
+                        conviction=debate.consensus_conviction_pct,
+                        rationale=debate.verdict_rationale,
+                    )
+                    self._recent_ai_vetoes.append({
+                        "symbol": symbol,
+                        "type": "COUNCIL_VETO",
+                        "conviction": debate.consensus_conviction_pct,
+                        "rationale": debate.verdict_rationale,
+                        "timestamp": now_utc.isoformat(),
+                    })
+                    self._recent_ai_vetoes = self._recent_ai_vetoes[-20:]
+                    continue
+                elif not is_usdt and debate.verdict == "VETOED":
                     logger.info(
                         "council_of_quants_veto",
                         symbol=symbol,
@@ -458,6 +523,36 @@ class AutonomousEngineService:
                         rationale=debate.verdict_rationale,
                     )
                     continue
+
+                # Phase 2: AI Quantitative Co-Pilot Double-Check for USDT Pairs
+                if is_usdt:
+                    ai_check = await self._validate_usdt_signal_with_ai(
+                        symbol=symbol,
+                        last_price=last_p_float,
+                        rsi=cur_rsi,
+                        fast_ema=fast_ema,
+                        slow_ema=slow_ema,
+                        vol_ratio=vol_ratio,
+                        macro_regime=ai_macro,
+                        sentiment_index=ai_sentiment,
+                        debate_conviction=debate.consensus_conviction_pct,
+                    )
+                    if not ai_check["approved"]:
+                        logger.info(
+                            "ai_double_check_usdt_veto",
+                            symbol=symbol,
+                            reason=ai_check["reason"],
+                            confidence=ai_check.get("confidence"),
+                        )
+                        self._recent_ai_vetoes.append({
+                            "symbol": symbol,
+                            "type": "AI_DOUBLE_CHECK_VETO",
+                            "conviction": ai_check.get("confidence", 80),
+                            "rationale": ai_check["reason"],
+                            "timestamp": now_utc.isoformat(),
+                        })
+                        self._recent_ai_vetoes = self._recent_ai_vetoes[-20:]
+                        continue
 
                 if self._execution_target == "paper":
                     # 1. Spot Order Execution (Buy/Sell) in Paper Simulation Mode
@@ -936,6 +1031,114 @@ class AutonomousEngineService:
             }
 
         return self._latest_ai_research
+
+    async def _validate_usdt_signal_with_ai(
+        self,
+        *,
+        symbol: str,
+        last_price: float,
+        rsi: float | None,
+        fast_ema: float | None,
+        slow_ema: float | None,
+        vol_ratio: float | None,
+        macro_regime: str,
+        sentiment_index: int,
+        debate_conviction: int,
+    ) -> dict[str, Any]:
+        """Perform institutional AI double-check before approving any directional USDT trade."""
+        # 1. Immediate Rule-based AI Macro Guard
+        if macro_regime == "BEARISH_LIQUIDATION":
+            return {
+                "approved": False,
+                "reason": "AI Macro Guard: Directional spot longs forbidden in BEARISH_LIQUIDATION regime.",
+                "confidence": 95,
+            }
+
+        if macro_regime in ("COMPRESSION_SQUEEZE", "VOLATILE_CHOP") and sentiment_index < 50:
+            if rsi is not None and rsi > 40:
+                return {
+                    "approved": False,
+                    "reason": f"AI Macro Guard: {macro_regime} with Fear sentiment ({sentiment_index}/100). High fakeout trap risk.",
+                    "confidence": 88,
+                }
+
+        # 2. If AI client is configured, request instant LLM validation with timeout
+        if self._ai_client is not None:
+            prompt = (
+                f"You are the Chief Risk Officer for NEXUS Institutional Trading. "
+                f"Algorithmic scanner emitted a BUY signal on {symbol} at ${last_price:,.4f}.\n"
+                f"Telemetry:\n"
+                f"- RSI: {rsi if rsi is not None else 'N/A'}\n"
+                f"- Fast EMA: {fast_ema if fast_ema is not None else 'N/A'}, Slow EMA: {slow_ema if slow_ema is not None else 'N/A'}\n"
+                f"- Volume vs 20MA: {vol_ratio:.2f}x\n"
+                f"- Macro: {macro_regime}, Sentiment: {sentiment_index}/100\n"
+                f"- Council Conviction: {debate_conviction}%\n\n"
+                f"Evaluate if this trade is safe or a trap. Respond ONLY in valid JSON:\n"
+                f'{{"approved": true or false, "confidence": integer 0-100, "reason": "concise explanation"}}'
+            )
+            try:
+                raw_resp = await asyncio.wait_for(
+                    self._ai_client.generate_market_analysis(
+                        system_prompt="You are NEXUS Chief Risk Officer. Be skeptical, protect capital, reject traps.",
+                        user_payload={"instruction": prompt},
+                    ),
+                    timeout=3.5,
+                )
+                clean_text = raw_resp.strip()
+                if clean_text.startswith("```"):
+                    clean_text = clean_text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+                data = json.loads(clean_text)
+                is_app = bool(data.get("approved", False))
+                conf = int(data.get("confidence", 0))
+                if is_app and conf >= 70:
+                    return {
+                        "approved": True,
+                        "confidence": conf,
+                        "reason": data.get("reason", "AI Double-Check Approved"),
+                    }
+                return {
+                    "approved": False,
+                    "confidence": conf,
+                    "reason": data.get("reason", "AI Double-Check Vetoed (High Trap Risk / Low Conviction)"),
+                }
+            except Exception as exc:
+                logger.debug("ai_double_check_llm_skipped_fallback", error=str(exc))
+
+        # 3. Deterministic Quantitative Double-Check Fallback
+        bull_factors = 0
+        reasons: list[str] = []
+        if rsi is not None and 30 <= rsi <= 62:
+            bull_factors += 1
+        elif rsi is not None and rsi > 62:
+            reasons.append(f"RSI overextended ({rsi:.1f})")
+
+        if vol_ratio is not None and vol_ratio >= 1.15:
+            bull_factors += 1
+        elif vol_ratio is not None and vol_ratio < 0.95:
+            reasons.append(f"Weak volume support ({vol_ratio:.2f}x)")
+
+        if fast_ema is not None and slow_ema is not None and fast_ema > slow_ema:
+            bull_factors += 1
+        elif fast_ema is not None and slow_ema is not None and fast_ema <= slow_ema:
+            reasons.append("EMA alignment negative")
+
+        if sentiment_index >= 45:
+            bull_factors += 1
+        else:
+            reasons.append(f"Depressed sentiment index ({sentiment_index})")
+
+        if bull_factors >= 3 and debate_conviction >= 75:
+            return {
+                "approved": True,
+                "confidence": 75 + (bull_factors * 5),
+                "reason": "Quantitative AI fallback verified 3+ institutional confluence factors.",
+            }
+
+        return {
+            "approved": False,
+            "confidence": 80,
+            "reason": f"AI Confluence Gate failed: {', '.join(reasons) or 'Insufficient multi-factor momentum'}",
+        }
 
     # -------------------------------------------------------------------------
     # Background Loop: Automated 15-Minute Candle Maintainer

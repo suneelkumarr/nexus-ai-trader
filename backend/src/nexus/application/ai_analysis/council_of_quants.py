@@ -63,11 +63,14 @@ class CouncilOfQuantsEngine:
         rsi: float | None = None,
         volume_ratio: float | None = None,
         market_breadth_pct: float = 58.0,
+        macro_regime: str | None = None,
+        is_usdt_pair: bool | None = None,
     ) -> CouncilDebateResult:
         """Run debate between Momentum Bull, Risk Skeptic, and Chief Arbitrator."""
         now_utc = datetime.now(UTC)
         debate_id = str(uuid.uuid4())[:8]
 
+        is_usdt = is_usdt_pair if is_usdt_pair is not None else symbol.strip().upper().endswith("/USDT")
         f_ema = fast_ema if fast_ema is not None else last_price * 1.008
         s_ema = slow_ema if slow_ema is not None else last_price * 0.995
         cur_rsi = rsi if rsi is not None else 56.4
@@ -205,7 +208,32 @@ class CouncilOfQuantsEngine:
                 )
             )
 
-        bear_score = min(max(bear_score, 10), 92)
+        # Macro Regime Risk Scoring
+        if macro_regime in ("VOLATILE_CHOP", "COMPRESSION_SQUEEZE"):
+            penalty = 14 if market_breadth_pct < 50 else 5
+            bear_score += penalty
+            bear_red_flags.append(f"Macro {macro_regime}: range chop elevates fakeout risk")
+            bear_args.append(
+                AgentArgument(
+                    category="Macro Regime",
+                    point=f"Market telemetry confirms {macro_regime}. Whipsaw risk on breakout entries is structurally elevated.",
+                    impact="HIGH" if penalty > 10 else "MEDIUM",
+                    is_supporting=True,
+                )
+            )
+        elif macro_regime == "BEARISH_LIQUIDATION":
+            bear_score += 28
+            bear_red_flags.append("Macro BEARISH_LIQUIDATION: systemic cascading downside")
+            bear_args.append(
+                AgentArgument(
+                    category="Macro Regime",
+                    point="Systemic liquidation underway across crypto universe. Directional longs carry extreme tail risk.",
+                    impact="HIGH",
+                    is_supporting=True,
+                )
+            )
+
+        bear_score = min(max(bear_score, 10), 95)
         threat: Literal["CRITICAL", "ELEVATED", "CONTAINED"] = (
             "CRITICAL" if bear_score >= 70 else "ELEVATED" if bear_score >= 45 else "CONTAINED"
         )
