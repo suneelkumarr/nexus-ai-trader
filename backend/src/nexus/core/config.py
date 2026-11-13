@@ -5,7 +5,7 @@ from functools import lru_cache
 from typing import Literal
 from urllib.parse import parse_qsl, quote_plus, urlencode, urlsplit, urlunsplit
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from nexus.core.ai_config import AIAnalysisConfig
@@ -68,7 +68,12 @@ class Settings(BaseSettings):
     app_env: Literal["development", "staging", "production", "test"] = "development"
     app_version: str = "0.1.0"
     api_host: str = "0.0.0.0"
-    api_port: int = Field(default=8000, ge=1, le=65535)
+    api_port: int = Field(
+        default=8000,
+        ge=1,
+        le=65535,
+        validation_alias=AliasChoices("api_port", "API_PORT", "port", "PORT"),
+    )
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     log_format: Literal["json", "console"] = "json"
     cors_origins: list[str] = Field(
@@ -118,7 +123,12 @@ class Settings(BaseSettings):
     database_echo: bool = False
     db_pool_size: int = Field(default=5, ge=1, le=50)
     db_max_overflow: int = Field(default=10, ge=0, le=100)
-    database_url_override: SecretStr | None = None
+    database_url_override: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "database_url_override", "DATABASE_URL_OVERRIDE", "database_url", "DATABASE_URL"
+        ),
+    )
 
     @field_validator("allowed_symbols")
     @classmethod
@@ -176,6 +186,13 @@ class Settings(BaseSettings):
                 f"{self.supported_timeframes}."
             )
         self.default_timeframe = self.default_timeframe.strip().lower()
+
+        # Cloud deployment convenience: accept NVIDIA_API_KEY as alias for ai.api_key
+        import os
+
+        env_key = os.environ.get("NVIDIA_API_KEY", "").strip()
+        if env_key and not self.ai.api_key.get_secret_value().strip():
+            self.ai.api_key = SecretStr(env_key)
 
         self.trading_mode = "paper"
         self.market_type = "spot"

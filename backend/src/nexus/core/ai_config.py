@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, SecretStr, field_validator
+from pydantic import AliasChoices, BaseModel, Field, SecretStr, field_validator
 
 from nexus.core.exceptions import ConfigurationInvariantError
 
@@ -13,7 +13,10 @@ class AIAnalysisConfig(BaseModel):
     enabled: bool = True
     provider: Literal["openai_compatible", "deterministic"] = "openai_compatible"
     base_url: str = "https://api.openai.com/v1"
-    api_key: SecretStr = Field(default=SecretStr(""))
+    api_key: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("api_key", "AI__API_KEY", "AI_API_KEY", "NVIDIA_API_KEY"),
+    )
     model: str = "gpt-4o-mini"
     timeout_s: float = Field(default=45.0, ge=1.0, le=120.0)
     max_retries: int = Field(default=2, ge=0, le=5)
