@@ -10,6 +10,7 @@ export function useArbitrageRadar() {
   const [wsConnected, setWsConnected] = useState<boolean>(false);
   const [executing, setExecuting] = useState<boolean>(false);
   const [lastExecutionResult, setLastExecutionResult] = useState<string | null>(null);
+  const [executionHistory, setExecutionHistory] = useState<import("../types/arbitrage").ExecutePaperArbResponse[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const isMountedRef = useRef<boolean>(true);
@@ -118,6 +119,7 @@ export function useArbitrageRadar() {
       setLastExecutionResult(
         `Executed ${res.opportunity_id}: Net profit ₹${res.simulated_net_profit_inr} ($${res.simulated_net_profit_usdt})`,
       );
+      setExecutionHistory((prev) => [res, ...prev].slice(0, 30));
       // Refresh scan
       await refresh();
       return res;
@@ -137,6 +139,7 @@ export function useArbitrageRadar() {
     wsConnected,
     executing,
     lastExecutionResult,
+    executionHistory,
     refresh,
     triggerPaperExecution,
   };
