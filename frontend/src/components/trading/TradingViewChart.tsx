@@ -96,6 +96,12 @@ export function TradingViewChart({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (initialSymbol) {
+      setSymbol(initialSymbol);
+    }
+  }, [initialSymbol]);
+
   // Indicators toggles
   const [showEMA20, setShowEMA20] = useState<boolean>(true);
   const [showEMA50, setShowEMA50] = useState<boolean>(true);
