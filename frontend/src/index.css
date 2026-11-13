@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-obsidian: #020612;
+  --color-abyss: #060e20;
+  --color-panel: #0a152e;
+  --color-cyan-glow: #22d3ee;
+  --color-electric: #3b82f6;
+  --color-gold-muted: #d4af37;
+}
+
+@layer base {
+  html,
+  body {
+    background-color: #020612;
+    color: #e2e8f0;
+    font-family: var(--font-sans);
+    min-height: 100vh;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.nexus-grid-bg {
+  background-image:
+    radial-gradient(circle at 50% 25%, rgba(34, 211, 238, 0.08), transparent 55%),
+    radial-gradient(circle at 80% 10%, rgba(59, 130, 246, 0.09), transparent 45%),
+    linear-gradient(rgba(148, 163, 184, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    100% 100%,
+    42px 42px,
+    42px 42px;
+}
+
+.nexus-panel {
+  background: linear-gradient(160deg, rgba(10, 21, 46, 0.88), rgba(4, 10, 24, 0.94));
+  border: 1px solid rgba(56, 189, 248, 0.16);
+  box-shadow:
+    0 12px 36px -18px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+}

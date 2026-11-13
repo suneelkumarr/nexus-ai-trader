@@ -1,0 +1,149 @@
+{
+  "report_metadata": {
+    "application": "NEXUS AI TRADER",
+    "audit_date_utc": "2026-11-12T17:45:00Z",
+    "release_gate_decision": "NOT_READY_FOR_LIVE_TRADING",
+    "paper_only_verified": true,
+    "live_trading_enabled_default": false,
+    "all_open_vulnerabilities_remediated": true
+  },
+  "vulnerabilities": [
+    {
+      "id": "SEC-001",
+      "title": "Non-Atomic Multi-Transaction Order Settlement and Missing Concurrent Row Locking",
+      "severity": "Critical",
+      "cwe": ["CWE-362", "CWE-460"],
+      "owasp": ["API6:2023"],
+      "components": [
+        "backend/src/nexus/application/persistent_paper_broker.py",
+        "backend/src/nexus/infrastructure/db/paper_repository.py",
+        "backend/src/nexus/domain/interfaces.py"
+      ],
+      "status": "Fixed",
+      "remediation_note": "Refactored BUY and SELL settlement into atomic commit_order_settlement inside session.begin() with Postgres with_for_update row locking; verified by fault-injection rollback test."
+    },
+    {
+      "id": "SEC-002",
+      "title": "Missing Authentication, Authorization, and Rate Limiting on FastAPI Control, Settings, and WebSocket Endpoints",
+      "severity": "High",
+      "cwe": ["CWE-306", "CWE-770"],
+      "owasp": ["API2:2023", "API4:2023", "API5:2023"],
+      "components": [
+        "backend/src/nexus/core/security.py",
+        "backend/src/nexus/api/v1/terminal.py",
+        "backend/src/nexus/api/v1/analysis.py",
+        "frontend/src/services/apiClient.ts"
+      ],
+      "status": "Fixed",
+      "remediation_note": "Implemented require_admin_auth dependency (Bearer / X-Nexus-API-Key), WebSocket token authentication, sliding-window IP rate limiter, and 2MB payload size limit middleware."
+    },
+    {
+      "id": "SEC-003",
+      "title": "Unwired Runtime Trading Orchestrator and Volatile In-Memory Signal Deduplication",
+      "severity": "High",
+      "cwe": ["CWE-841"],
+      "owasp": ["API10:2023"],
+      "components": [
+        "backend/src/nexus/workers/scheduler.py",
+        "backend/src/nexus/application/strategy/v1_engine.py",
+        "backend/src/nexus/api/v1/terminal.py"
+      ],
+      "status": "Fixed",
+      "remediation_note": "Implemented AutonomousPaperTradingOrchestrator directly wiring MarketDataService, NexusStrategyV1, and PersistentPaperBroker with kill-switch abort and checkpoint persistence export/import."
+    },
+    {
+      "id": "SEC-004",
+      "title": "Unscrubbed Exception Strings in Logs and Raw Database Health Error Reflection",
+      "severity": "Medium",
+      "cwe": ["CWE-209", "CWE-532"],
+      "owasp": ["API8:2023"],
+      "components": [
+        "backend/src/nexus/core/logging.py",
+        "backend/src/nexus/infrastructure/db/session.py"
+      ],
+      "status": "Fixed",
+      "remediation_note": "Added regex value scrubbing for DSN passwords, Bearer tokens, and API keys in structlog processor; sanitized check_health error reflection."
+    },
+    {
+      "id": "SEC-005",
+      "title": "Synchronous Event-Loop Blocking in Backtest Endpoint and Nullable Idempotency Key on Direct Broker Calls",
+      "severity": "Medium",
+      "cwe": ["CWE-400", "CWE-362"],
+      "owasp": ["API4:2023"],
+      "components": [
+        "backend/src/nexus/api/v1/terminal.py",
+        "backend/src/nexus/application/persistent_paper_broker.py"
+      ],
+      "status": "Fixed",
+      "remediation_note": "Offloaded run_suite via asyncio.to_thread, enforced non-null automatic client_order_id assignment, and handled MarketDataUnavailableError cleanly in broker."
+    },
+    {
+      "id": "SEC-006",
+      "title": "Root Container Execution, Missing Nginx Security Headers, and Unencrypted Port Exposure",
+      "severity": "Medium",
+      "cwe": ["CWE-250", "CWE-693", "CWE-319"],
+      "owasp": ["API8:2023"],
+      "components": [
+        "backend/Dockerfile",
+        "frontend/Dockerfile",
+        "frontend/nginx.conf",
+        "docker-compose.yml"
+      ],
+      "status": "Fixed",
+      "remediation_note": "Added non-root user in Dockerfile, npm ci build, strict Nginx CSP/clickjacking/MIME security headers with server_tokens off, and locked docker-compose ports to 127.0.0.1 loopback with cap_drop ALL."
+    },
+    {
+      "id": "SEC-007",
+      "title": "Missing Exchange Timestamp Masking in Ticker Parser and Entry-Cost Fallback in MTM",
+      "severity": "Medium",
+      "cwe": ["CWE-672"],
+      "owasp": ["API10:2023"],
+      "components": [
+        "backend/src/nexus/infrastructure/exchange/ccxt_client.py",
+        "backend/src/nexus/application/risk_manager.py"
+      ],
+      "status": "Fixed",
+      "remediation_note": "Rejected unverified/missing ticker timestamps with MarketDataUnavailableError and added open position quote verification halting new entries if quotes are unavailable."
+    },
+    {
+      "id": "SEC-008",
+      "title": "Wildcard CORS Allow-Headers and Static Default Backtest FX Rate",
+      "severity": "Low",
+      "cwe": ["CWE-942"],
+      "owasp": ["API8:2023"],
+      "components": [
+        "backend/src/nexus/main.py",
+        "backend/src/nexus/api/v1/terminal.py"
+      ],
+      "status": "Fixed",
+      "remediation_note": "Restricted CORS allow_headers to explicit safe headers and wired dynamic FX rate fetching into terminal backtest execution."
+    },
+    {
+      "id": "SEC-009",
+      "title": "Open Python Dependency Ranges, Absent Git VCS, and Missing Lockfiles",
+      "severity": "Medium",
+      "cwe": ["CWE-1104"],
+      "owasp": ["ASVS-V14"],
+      "components": [
+        "backend/requirements.lock",
+        "backend/Dockerfile",
+        ".git"
+      ],
+      "status": "Fixed",
+      "remediation_note": "Initialized Git repository with gitignored .env, generated requirements.lock for deterministic Python dependency pinning, and switched frontend Dockerfile to npm ci."
+    },
+    {
+      "id": "SEC-010",
+      "title": "Absence of Live PostgreSQL Execution Verification",
+      "severity": "Medium",
+      "cwe": ["CWE-1059"],
+      "owasp": ["ASVS-V1"],
+      "components": [
+        "backend/tests/security/test_financial_safety_invariants.py",
+        "alembic"
+      ],
+      "status": "Fixed",
+      "remediation_note": "Applied Alembic migrations to live Aiven PostgreSQL, verified table schema and health probe, and added automated live PostgreSQL test in security test suite."
+    }
+  ]
+}

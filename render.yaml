@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: nexus-ai-trader-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: frankfurt
+    healthCheckPath: /api/v1/health/live
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: TRADING_MODE
+        value: paper
+      - key: MARKET_TYPE
+        value: spot
+      - key: LIVE_TRADING_ENABLED
+        value: "false"
+      - key: ALLOW_LEVERAGE
+        value: "false"
+      - key: ALLOW_FUTURES
+        value: "false"
+      - key: ALLOW_WITHDRAWALS
+        value: "false"
+      - key: INITIAL_CAPITAL_INR
+        value: "10000.00"
+      - key: API_AUTH_TOKEN
+        value: nexus_sec_admin_7f9b8a3e4c1d2e5a6f8b
+      - key: DATABASE_URL
+        sync: false
+      - key: AI__API_KEY
+        sync: false
+
