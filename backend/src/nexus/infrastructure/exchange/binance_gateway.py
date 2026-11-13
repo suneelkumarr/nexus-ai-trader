@@ -198,24 +198,43 @@ class BinanceFuturesGateway:
             server_time = client.time()
             clock_drift_ms = abs(int(time.time() * 1000) - server_time.get("serverTime", 0))
 
-            # 3. Account inspection (verifies credentials + permissions)
+            # 3. Account inspection & Official API Key Permission Check
             acc = client.account()
-            can_trade = acc.get("canTrade", False)
-            can_deposit = acc.get("canDeposit", False)
-            can_withdraw = acc.get("canWithdraw", False)
+            can_trade = True
+            can_deposit = True
+            can_withdraw = False
+
+            try:
+                from binance.spot import Spot  # type: ignore[import-untyped]
+
+                spot_client = Spot(api_key=api_key, api_secret=api_secret)
+                perms = spot_client.api_key_permissions()
+                can_trade = bool(
+                    perms.get("enableFutures", False)
+                    or perms.get("enableSpotAndMarginTrading", False)
+                )
+                can_withdraw = bool(perms.get("enableWithdrawals", False))
+            except Exception:
+                can_trade = bool(
+                    "totalWalletBalance" in acc
+                    or "availableBalance" in acc
+                    or acc.get("canTrade", True)
+                )
+                can_withdraw = bool(acc.get("canWithdraw", False))
 
             # Strict Invariant: Withdrawals must NOT be enabled on algorithmic trading keys
             if can_withdraw:
                 logger.warning("binance_withdrawal_permission_detected")
 
-            assets = acc.get("assets", [])
-            usdt_asset = next((a for a in assets if a.get("asset") == "USDT"), None)
-            wallet_balance = (
-                float(usdt_asset.get("walletBalance", 0)) if usdt_asset else 0.0
-            )
-            available_balance = (
-                float(usdt_asset.get("availableBalance", 0)) if usdt_asset else 0.0
-            )
+            wallet_balance = float(acc.get("totalWalletBalance", 0.0))
+            available_balance = float(acc.get("availableBalance", 0.0))
+
+            if wallet_balance == 0.0:
+                assets = acc.get("assets", [])
+                usdt_asset = next((a for a in assets if a.get("asset") == "USDT"), None)
+                if usdt_asset:
+                    wallet_balance = float(usdt_asset.get("walletBalance", 0.0))
+                    available_balance = float(usdt_asset.get("availableBalance", 0.0))
 
             positions = acc.get("positions", [])
             open_positions = [

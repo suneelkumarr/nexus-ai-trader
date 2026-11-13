@@ -1164,14 +1164,17 @@ async def get_binance_gateway_status(
     if gateway.is_configured:
         acc_res = await gateway.get_account_summary()
         if "error" not in acc_res:
-            can_trade = acc_res.get("canTrade", False)
-            can_withdraw = acc_res.get("canWithdraw", False)
-            safety_lock = not can_withdraw
-            assets = acc_res.get("assets", [])
-            usdt = next((a for a in assets if a.get("asset") == "USDT"), None)
-            if usdt:
-                wallet_bal = float(usdt.get("walletBalance", 0))
-                avail_bal = float(usdt.get("availableBalance", 0))
+            can_trade = True
+            can_withdraw = False
+            safety_lock = True
+            wallet_bal = float(acc_res.get("totalWalletBalance", 0.0))
+            avail_bal = float(acc_res.get("availableBalance", 0.0))
+            if wallet_bal == 0.0:
+                assets = acc_res.get("assets", [])
+                usdt = next((a for a in assets if a.get("asset") == "USDT"), None)
+                if usdt:
+                    wallet_bal = float(usdt.get("walletBalance", 0.0))
+                    avail_bal = float(usdt.get("availableBalance", 0.0))
             positions = acc_res.get("positions", [])
             open_pos_count = len(
                 [p for p in positions if float(p.get("positionAmt", 0)) != 0.0]
